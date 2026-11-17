@@ -1,9 +1,9 @@
 /**
  * Miniature Worlds (Site B): agents, tools, the commission board, the live 3D viewport and the RPC surface.
  */
-import { AgentRuntime, serveRpc, exposeGlobal, OawError, uid } from "./shared/oaw-core.js?v=b0749dd31e";
-import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=b0749dd31e";
-import * as L from "./studio-logic.js?v=b0749dd31e";
+import { AgentRuntime, serveRpc, exposeGlobal, OawError, uid } from "./shared/oaw-core.js?v=748213ee79";
+import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=748213ee79";
+import * as L from "./studio-logic.js?v=748213ee79";
 
 const embedded = window.parent !== window || new URLSearchParams(location.search).has("embedded");
 document.body.classList.toggle("embedded", embedded);
@@ -31,7 +31,7 @@ const quotes = new Map(); // quote_id -> internal quote (includes the floor, nev
 let viewer = null;
 const vp = $("#viewport");
 try {
-  const { createViewer } = await import("./scene.js?v=b0749dd31e");
+  const { createViewer } = await import("./scene.js?v=748213ee79");
   viewer = createViewer(vp);
 } catch (e) {
   vp.append(h("div", { class: "vp-error" }, h("strong", { text: "3D preview unavailable" }), h("span", { text: ` Three.js loads from cdn.jsdelivr.net (${e.message}). Agents, quotes and the board still work.` })));

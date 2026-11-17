@@ -414,8 +414,11 @@ class HybridProvider {
       const onAbort = () => ctl.abort();
       req.signal?.addEventListener("abort", onAbort, { once: true });
       const timer = setTimeout(() => ctl.abort(), NANO_TIMEOUT_MS);
+      // Race the call: even if Nano ignores the abort signal (a stuck create() or prompt()), we move on.
+      const gaveUp = new Promise((_, reject) => ctl.signal.addEventListener("abort", () => reject(abortError()), { once: true }));
+      gaveUp.catch(() => {});
       try {
-        const r = await this.nano.generate({ ...req, signal: ctl.signal });
+        const r = await Promise.race([this.nano.generate({ ...req, signal: ctl.signal }), gaveUp]);
         r.telemetry.route = "local";
         return r;
       } catch (e) {

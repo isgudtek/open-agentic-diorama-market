@@ -13,10 +13,20 @@ const originOf = (u) => new URL(u).origin;
 
 /* ----------------------------------------------------------------- state */
 
-const SUPPLIERS_KEY = "hub.suppliers.v1";
+const SUPPLIERS_KEY = "hub.suppliers.custom.v2"; // only suppliers the visitor added
 const ORDERS_KEY = "hub.orders.v1";
 const loadJson = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v ?? d; } catch { return d; } };
-let registry = loadJson(SUPPLIERS_KEY, manifest.peers?.suppliers || []);
+const isLoopback = (u) => { try { return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(u).hostname); } catch { return false; } };
+const pageIsLocal = isLoopback(location.href);
+const trimUrl = (u) => String(u).replace(/\/+$/, "");
+const published = (manifest.peers?.suppliers || []).map(trimUrl);
+// Older versions stored the whole list (including published defaults) under hub.suppliers.v1: keep only extras.
+const legacy = loadJson("hub.suppliers.v1", null);
+if (Array.isArray(legacy)) { localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(legacy.map(trimUrl).filter((u) => !published.includes(u)))); localStorage.removeItem("hub.suppliers.v1"); }
+let custom = loadJson(SUPPLIERS_KEY, []).map(trimUrl);
+const skipped = custom.filter((u) => !pageIsLocal && isLoopback(u)); // a localhost supplier makes no sense on a public page
+let registry = [...new Set([...published, ...custom.filter((u) => !skipped.includes(u))])];
+const saveCustom = () => localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(custom));
 let orders = loadJson(ORDERS_KEY, []);
 const discovered = new Map(); // url -> { url, origin, name, ok, manifest, network, checks, capabilities, scales, error, cors }
 const contacted = new Set(); // origins approved for this session
@@ -35,7 +45,7 @@ const clients = new Map();
 function openSplit(url) {
   const o = originOf(url);
   if (!frame || frameOrigin !== o) {
-    const u = new URL(url);
+    const u = new URL(url.endsWith("/") ? url : `${url}/`); // the site's folder, no redirect needed
     u.searchParams.set("embedded", "1");
     frame = h("iframe", { src: u.href, title: "Supplier site (live)", class: "peer-frame" });
     frameOrigin = o;
@@ -54,7 +64,7 @@ function closeSplit() {
   $("#splitBtn").setAttribute("aria-pressed", "false");
   $("#splitBtn").textContent = "Open Studio Split-View";
 }
-const defaultSupplier = () => registry[0] || "http://localhost:62261";
+const defaultSupplier = () => registry[0] || published[0];
 $("#splitBtn").addEventListener("click", () => (document.body.classList.contains("split-on") ? closeSplit() : openSplit(defaultSupplier())));
 $("#tabBtn").addEventListener("click", () => { tab = window.open(defaultSupplier(), "miniature-worlds"); tabOrigin = originOf(defaultSupplier()); });
 
@@ -347,7 +357,7 @@ function drawRegistry() {
       h("div", {}, h("strong", { text: d?.name || host(url) }), h("p", { class: "oaw-muted small", text: url }), h("p", { class: "small status", text: status })),
       h("div", { class: "oaw-row" },
         h("button", { class: "oaw-btn small", type: "button", text: "Check", onclick: () => discoverOne(url).catch(() => {}) }),
-        h("button", { class: "oaw-btn small ghost", type: "button", text: "Remove", "aria-label": `Remove ${url}`, onclick: () => { registry = registry.filter((x) => x !== url); localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(registry)); drawRegistry(); } })));
+        published.includes(url) ? h("span", { class: "oaw-badge", text: "published", title: "Listed in this hub's agent-manifest.json" }) : h("button", { class: "oaw-btn small ghost", type: "button", text: "Remove", "aria-label": `Remove ${url}`, onclick: () => { custom = custom.filter((x) => x !== url); registry = registry.filter((x) => x !== url); saveCustom(); drawRegistry(); } })));
   }));
 }
 $("#addSupplier").addEventListener("submit", (e) => {
@@ -357,10 +367,10 @@ $("#addSupplier").addEventListener("submit", (e) => {
     const u = new URL(v);
     if (!["http:", "https:"].includes(u.protocol)) throw new Error();
     if (u.protocol === "http:" && !["localhost", "127.0.0.1"].includes(u.hostname)) throw new Error("Use https:// for live sites (http:// only for localhost).");
+    if (!pageIsLocal && isLoopback(v)) throw new Error("This hub is public; a localhost supplier only works when the hub itself runs on localhost (npm start).");
   } catch (err) { $("#supplierMsg").textContent = err.message || "Enter a valid http(s) URL."; return; }
   $("#supplierMsg").textContent = "";
-  if (!registry.includes(v)) registry.push(v);
-  localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(registry));
+  if (!registry.includes(v)) { registry.push(v); if (!published.includes(v)) { custom.push(v); saveCustom(); } }
   $("#supplierUrl").value = "";
   drawRegistry();
 });
@@ -424,5 +434,6 @@ drawDeal();
 drawRegistry();
 drawOrders();
 await runtime.probeNano();
-stream.add({ type: "note", text: `Network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label} · ${registry.length} registered supplier(s)` });
+stream.add({ type: "note", text: `Network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label} · suppliers: ${registry.map((u) => host(u) + new URL(u).pathname.replace(/\/$/, "")).join(", ")}` });
+if (skipped.length) stream.add({ type: "note", text: `Ignored saved localhost supplier(s) on this public page: ${skipped.join(", ")}` });
 document.body.dataset.ready = "true";

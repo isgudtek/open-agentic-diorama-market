@@ -1,7 +1,7 @@
 /**
  * oaw-ui.js: shared UI for both sites. All model/peer text is rendered with textContent, never as HTML.
  */
-import { OTARI_REGIONS, OTARI_MODELS, validateManifest, testOtari, listOtariModels } from "./oaw-core.js";
+import { OTARI_REGIONS, OTARI_MODELS, validateManifest, testOtari, listOtariModels, cleanApiKey } from "./oaw-core.js";
 
 export function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -313,7 +313,10 @@ export function createSettings({ runtime, onSaved }) {
     }
   }
   radios.forEach((r) => r.querySelector("input").addEventListener("change", showPanels));
-  apiKey.addEventListener("change", () => { if (apiKey.value.trim().length >= 8) loadModels(); });
+  apiKey.addEventListener("change", () => {
+    try { apiKey.value = cleanApiKey(apiKey.value); } catch (e) { showError(e); return; }
+    if (apiKey.value.length >= 8) loadModels();
+  });
   modelSel.addEventListener("change", () => { modelCustom.hidden = modelSel.value !== "__custom"; if (!modelCustom.hidden) modelCustom.focus(); });
   nanoInit.addEventListener("click", async () => { try { await runtime.initNano(); } catch (e) { msg.className = "oaw-msg"; msg.textContent = e.message; } });
   runtime.on((e) => { if (e.type === "nano_status") drawNano(); });
@@ -322,6 +325,9 @@ export function createSettings({ runtime, onSaved }) {
     const s = collect();
     msg.className = "oaw-msg";
     if (!s.mode) { msg.textContent = "Choose a provider."; return; }
+    if (s.mode === "otari" || (s.mode === "hybrid" && s.otari.apiKey)) {
+      try { s.otari.apiKey = cleanApiKey(s.otari.apiKey); apiKey.value = s.otari.apiKey; } catch (err) { msg.textContent = err.message; return; }
+    }
     if (s.mode === "otari") {
       if (!s.otari.apiKey) { msg.textContent = "Mozilla Otari needs an API key."; return; }
       if (!s.otari.model) { msg.textContent = "Enter a model string."; return; }

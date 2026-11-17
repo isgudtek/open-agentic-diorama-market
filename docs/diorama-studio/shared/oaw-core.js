@@ -119,6 +119,21 @@ export function validateManifest(m, network = null) {
 
 /* --------------------------------------------------------------- settings */
 
+/**
+ * Clean a pasted API key: drop whitespace and invisible characters (zero-width, BOM, non-breaking space).
+ * Throws BAD_KEY if anything else could not be sent in an HTTP header (fetch only accepts ISO-8859-1).
+ */
+export function cleanApiKey(key) {
+  const k = String(key ?? "").replace(/[\s\u00A0\u200B-\u200D\u2060\uFEFF]+/g, "");
+  const bad = [...k].findIndex((ch) => ch.charCodeAt(0) < 0x21 || ch.charCodeAt(0) > 0x7e);
+  if (bad >= 0) {
+    const ch = [...k][bad];
+    const cp = `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`;
+    throw new OawError("BAD_KEY", `The API key contains a character that cannot be sent (${cp}${ch === "\u2026" ? ' "…"' : ""} at position ${bad + 1} of ${[...k].length}). ${ch === "\u2026" ? "The key was copied truncated. " : ""}Copy the full key again from the Otari dashboard.`);
+  }
+  return k;
+}
+
 export const OTARI_REGIONS = { global: "https://api.otari.ai/api/v1", eu: "https://eu.api.otari.ai/api/v1" };
 export const OTARI_MODELS = ["openai/gpt-4o-mini", "anthropic/claude-haiku-4-5", "meta-llama/llama-3.3-70b-instruct", "deepseek/deepseek-v4.1-flash"];
 export const MODES = ["otari", "nano", "hybrid", "demo"];
@@ -132,7 +147,9 @@ export function loadSettings(key, storage = globalThis.localStorage) {
   };
 }
 export function saveSettings(key, s, storage = globalThis.localStorage) {
-  storage?.setItem(key, JSON.stringify({ mode: s.mode, otari: { baseUrl: s.otari.baseUrl.trim(), apiKey: s.otari.apiKey.trim(), model: s.otari.model.trim() } }));
+  let apiKey = String(s.otari.apiKey || "").trim();
+  try { apiKey = cleanApiKey(apiKey); } catch { /* stored as typed; the provider reports BAD_KEY */ }
+  storage?.setItem(key, JSON.stringify({ mode: s.mode, otari: { baseUrl: s.otari.baseUrl.trim(), apiKey, model: s.otari.model.trim() } }));
 }
 export function clearSettings(key, storage = globalThis.localStorage) { storage?.removeItem(key); }
 
@@ -267,6 +284,7 @@ class OtariProvider {
   get configured() { return !!(this.apiKey && this.baseUrl && this.model); }
   async generate({ system, prompt, signal }) {
     if (!this.apiKey) throw new OawError("SETUP", "Mozilla Otari needs an API key. Open Model settings.");
+    this.apiKey = cleanApiKey(this.apiKey);
     let u;
     try { u = new URL(this.baseUrl); } catch { throw new OawError("SETUP", `Invalid Otari base URL: ${this.baseUrl}`); }
     if (u.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(u.hostname)) throw new OawError("SETUP", "Otari base URL must use https:// (http:// only on localhost).");
@@ -329,6 +347,7 @@ export function testOtari(otari) {
 export async function listOtariModels({ baseUrl, apiKey }) {
   let base = String(baseUrl || "").replace(/\/+$/, "");
   if (!apiKey) throw new OawError("SETUP", "Enter your Otari API key first.");
+  apiKey = cleanApiKey(apiKey);
   const get = async () => {
     try { return await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${apiKey}` }, credentials: "omit", referrerPolicy: "no-referrer" }); }
     catch (e) { throw new OawError("OTARI_NETWORK", `Could not reach ${base}. ${redact(e?.message, apiKey)}`); }

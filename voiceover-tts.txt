@@ -1,0 +1,32 @@
+[0:00–0:08]
+This is the OpenAgentic Procurement Hub. The Manifest Inspector checks its agent manifest against the Open Agentic Web specification.
+
+[0:08–0:16]
+In Model settings, I bring my own model through Mozilla Otari's OpenAI-compatible gateway. My key never leaves this browser.
+
+[0:16–0:23]
+Discovery fetches each studio's public agent-manifest dot JSON over CORS, and validates its agent network. Both studios pass.
+
+[0:23–0:48]
+Every site describes its agents as data, not code: a JSON network with instructions, tools and output schemas, following the Neuro SAN model. The browser runs them, with no backend. Now I describe the commission in plain language: an igloo and a mountain, in the snow, at one to twelve scale, in PVC, with a budget of four hundred dollars.
+
+[0:48–1:01]
+I run it. The intake agent, on Otari, turns my words into a structured RFQ. The hub sends it to both studios over a postMessage RPC protocol, with origin checks on both sides.
+
+[1:01–1:12]
+Each studio runs its own agents: a designer builds a procedural 3D scene, and an estimator prices it. Miniature Worlds: two hundred and forty-five dollars, in five days.
+
+[1:12–1:22]
+Frostbite Miniatures designs its own version: one hundred and seventy-five dollars, in nine days. Both are within budget, so the hub skips negotiation.
+
+[1:22–1:26]
+I choose Frostbite.
+
+[1:26–1:31]
+Every write tool needs human approval. Here is the exact payload.
+
+[1:31–1:38]
+The studio owns its board, so it asks its own owner to lock the build slot.
+
+[1:38–1:51]
+Commission confirmed. Three websites that had never met discovered each other, designed, quoted and sold a product on an open standard, with a human approving every step.

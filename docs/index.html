@@ -16,6 +16,10 @@
     a.card.frost { background: #1d2833; border-color: #3e5466; }
     strong { display: block; font-size: 18px; margin-bottom: 4px; }
     code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 5px; }
+    .links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .links a { color: #eef0ff; text-decoration: none; padding: 8px 14px; border-radius: 999px; border: 1px solid #343a66; background: #1b2042; font-size: 14px; }
+    .links a:hover { border-color: #7f8cff; }
+    .links a.video { background: #4353e8; border-color: #4353e8; }
   </style>
 </head>
 <body>
@@ -27,6 +31,11 @@
       <a class="card studio" href="diorama-studio/"><strong>Miniature Worlds</strong>Artisan studio: fast and premium. Live Three.js designer, quotes, a 12% negotiation floor and a commission board.</a>
       <a class="card frost" href="frostbite-studio/"><strong>Frostbite Miniatures</strong>Workshop for dense natural detail: cheaper, slower, an 8% floor. Same open runtime, its own agents and prices.</a>
     </div>
+    <nav class="links" aria-label="Project links">
+      <a class="video" href="https://youtu.be/T19TCyYNUu8" target="_blank" rel="noopener">Watch the demo video</a>
+      <a href="https://github.com/isgudtek/open-agentic-diorama-market" target="_blank" rel="noopener">Source code on GitHub</a>
+      <a href="https://devpost.com/software/coffeehouse5052" target="_blank" rel="noopener">Devpost project page</a>
+    </nav>
     <p>Start with the Hub and click <em>Run commission</em>: both studios design their own 3D diorama side by side, you compare the quotes, choose one, and the hub negotiates and asks you to approve the order.</p>
   </main>
 </body>

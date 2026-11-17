@@ -1,0 +1,25 @@
+I had a lot of fun "hacking" on this one, and I came out of it convinced that the Open Agentic Web standard can solve real problems. No servers to run. Every site publishes what its agents can do in a plain agent-manifest.json. And one shared standard means agents from different sites can find each other and do business with no glue code.
+
+To test that, I built Open Agentic Diorama Market for the Open Agentic Web Challenge by @Cognizant AI Lab, with Mozilla.
+
+Why: custom dioramas are a good stress test. Every order is unique, it has to be designed before it can be priced, and different makers price the same request differently.
+
+How it works:
+- A buyer hub turns your request ("an igloo and a mountain, 1:12, budget $400") into an RFQ.
+- It reads each studio's public manifest and sends the RFQ to both.
+- Two independent studios each design their own live 3D diorama and quote it. You see both side by side.
+- You choose one, the hub negotiates within your budget, and nothing is written until you approve.
+- You bring your own model: Mozilla Otari, Gemini Nano on your device, or a no-key demo mode.
+
+All of it runs in the browser with no backend. The sites talk over a postMessage protocol, and the agents are defined as JSON, not code.
+
+What was hard:
+- Getting small local models to return valid JSON reliably
+- Keeping two shops separate when they share one host
+- Enforcing budgets and discount floors in code, so a model can never break them
+
+Live demo: https://isgudtek.github.io/open-agentic-diorama-market/
+Code: https://github.com/isgudtek/open-agentic-diorama-market
+Devpost: https://devpost.com/software/coffeehouse5052
+
+#OpenAgenticWeb #AgenticAI #AIAgents #WebStandards #Cognizant #Mozilla #Hackathon

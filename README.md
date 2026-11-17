@@ -107,4 +107,10 @@ docs/                         built GitHub Pages output
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE). All code in this repository was written for this project.
+
+Third-party components, used under their own licenses and not redistributed here:
+
+- [Three.js](https://github.com/mrdoob/three.js) r187 (MIT), loaded at runtime from cdn.jsdelivr.net for the 3D viewport.
+- [Mozilla Otari](https://github.com/mozilla-ai/otari) (Apache 2.0) and Chrome's built-in Gemini Nano are called as services; no code from them is included.
+- The agent manifests and networks follow the [Minimum Viable Specification for a Worldwide Agentic Web](https://github.com/cognizant-ai-labs/agentic-web/blob/main/docs/worldwide_agentic_web_mvp_spec.md) and the Neuro SAN agent-network data model.

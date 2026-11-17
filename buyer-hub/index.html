@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenAgentic Procurement &amp; Commission Hub</title>
+  <meta name="description" content="A buyer-side open agentic website: agents turn a commission into an RFQ, discover suppliers from their agent manifests, negotiate and ask you to approve the order.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; frame-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'">
+  <link rel="alternate" type="application/json" href="agent-manifest.json" title="Agent manifest">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314182e'/%3E%3Cpath d='M8 21h16M8 16h11M8 11h16' stroke='%237f8cff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="shared/oaw-ui.css">
+  <link rel="stylesheet" href="hub.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div>
+        <h1>OpenAgentic Procurement Hub</h1>
+        <p class="sub">Commission anything from agentic suppliers · your budget, your approval</p>
+      </div>
+    </div>
+    <div class="actions">
+      <span id="pill" class="oaw-pill" role="status" aria-live="polite">Loading…</span>
+      <button id="manifestBtn" class="oaw-btn" type="button">Manifest Inspector</button>
+      <button id="settingsBtn" class="oaw-btn" type="button">Model settings</button>
+      <button id="splitBtn" class="oaw-btn primary" type="button" aria-pressed="false">Open Studio Split-View</button>
+      <button id="tabBtn" class="oaw-btn" type="button">Open in Tab</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main class="main">
+      <section class="panel" aria-label="Commission request">
+        <form id="composer" class="composer" autocomplete="off">
+          <label for="request">What do you want to commission?</label>
+          <textarea id="request" rows="3" maxlength="600" required placeholder="Commission a 1:35 WWII Desert Trench diorama, 40x40cm, with resin river and LED explosions, budget $450"></textarea>
+          <div class="oaw-row"><button id="runBtn" class="oaw-btn primary" type="submit">Run commission</button></div>
+          <div id="examples" class="chips" aria-label="Examples"></div>
+        </form>
+      </section>
+
+      <section class="panel" aria-label="Current deal">
+        <h2 class="ph">Deal</h2>
+        <div id="deal" class="deal" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-label="Supplier registry">
+        <h2 class="ph">Supplier registry</h2>
+        <ul id="suppliers" class="suppliers"></ul>
+        <form id="addSupplier" class="oaw-row" autocomplete="off">
+          <label class="sr-only" for="supplierUrl">Supplier site URL</label>
+          <input id="supplierUrl" type="url" placeholder="https://another-studio.example" spellcheck="false">
+          <button class="oaw-btn" type="submit">Add supplier</button>
+        </form>
+        <p id="supplierMsg" class="oaw-msg" role="alert"></p>
+        <p class="oaw-muted small">discovery_agent fetches each site's /agent-manifest.json (or /.well-known/agent-manifest.json) and only negotiates with sites that publish diorama.quote.</p>
+      </section>
+
+      <section class="panel" aria-label="Orders">
+        <h2 class="ph">Orders</h2>
+        <ul id="orders" class="orders"></ul>
+      </section>
+    </main>
+
+    <section class="split-pane" aria-label="Supplier site split view">
+      <div class="split-head"><strong>Supplier live view</strong> <span id="splitTitle" class="oaw-muted small"></span></div>
+      <p id="splitAttention" class="attention" role="status" hidden></p>
+      <div id="splitFrame" class="split-frame"></div>
+    </section>
+
+    <aside id="stream" class="oaw-stream stream" aria-label="Agent Network Execution Stream"></aside>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+node_modules/
+.DS_Store
+dist/
+.firebase/
+
+# Earlier "Agentic Task & Research Hub" prototype. It lives in this folder and is deployed
+# separately on Firebase Hosting; it is not part of this repository.
+public/
+firebase.json
+.firebaserc
+vercel.json
+netlify.toml
+scripts/vendor-firebase.mjs
+package-lock.json
+legacy-task-hub-README.md

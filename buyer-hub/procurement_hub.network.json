@@ -1,0 +1,64 @@
+{
+  "metadata": {
+    "name": "procurement_hub",
+    "description": "OpenAgentic Procurement & Commission Hub: turns a natural-language commission into an RFQ, discovers suppliers through their published agent manifests, and negotiates a quote. Placing the order always pauses for human approval.",
+    "limits": { "max_negotiation_rounds": 3 }
+  },
+  "tools": [
+    {
+      "name": "intake_agent",
+      "function": {
+        "description": "Front agent. Extracts a structured request for quote (RFQ) from the user's commission request.",
+        "parameters": { "type": "object", "required": ["request"], "properties": { "request": { "type": "string", "description": "The commission request in plain language." } } }
+      },
+      "instructions": "Extract a request for quote from the user's commission request. scale is a ratio like \"1:35\" (null if not given). theme is a short name for the subject, for example \"WWII Desert Trench\". terrain_hint is one of desert, urban, forest, snow (null if unclear). dimensions_cm has width and depth in centimetres (use 30 x 30 if not given). features lists requested extras such as \"resin river\" or \"LED explosions\"; do not invent any. max_budget is the budget as a number in USD, or null. currency is \"USD\". notes holds anything else important. Reply with the JSON object only.",
+      "output_schema": {
+        "type": "object",
+        "required": ["scale", "theme", "dimensions_cm", "features", "max_budget"],
+        "properties": {
+          "scale": { "type": ["string", "null"] },
+          "theme": { "type": "string", "maxLength": 80 },
+          "terrain_hint": { "type": ["string", "null"], "enum": ["desert", "urban", "forest", "snow", null] },
+          "dimensions_cm": { "type": "object", "required": ["width", "depth"], "properties": { "width": { "type": "number" }, "depth": { "type": "number" } } },
+          "features": { "type": "array", "maxItems": 8, "items": { "type": "string" } },
+          "max_budget": { "type": ["number", "null"] },
+          "currency": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "tools": ["discovery_agent"]
+    },
+    {
+      "name": "discovery_agent",
+      "function": {
+        "description": "Fetches /agent-manifest.json from registered supplier sites, checks their published capabilities and picks the best fit for the RFQ.",
+        "parameters": { "type": "object", "required": ["rfq", "suppliers"], "properties": { "rfq": { "type": "object" }, "suppliers": { "type": "array" } } }
+      },
+      "instructions": "Choose the best supplier for the RFQ from the given list. Only choose a supplier from the list. Prefer one that supports the RFQ's scale and terrain. Reply with {\"supplier_url\": <url from the list>, \"reason\": <one sentence>} and nothing else.",
+      "output_schema": {
+        "type": "object",
+        "required": ["supplier_url", "reason"],
+        "properties": { "supplier_url": { "type": "string" }, "reason": { "type": "string", "maxLength": 300 } }
+      },
+      "tools": ["discover_suppliers", "negotiator_agent"]
+    },
+    {
+      "name": "negotiator_agent",
+      "function": {
+        "description": "Sends the RFQ to the chosen supplier's agent network, evaluates the quote and 3D blueprint, negotiates if it is over budget, and asks the human to approve the order.",
+        "parameters": { "type": "object", "required": ["rfq", "quote", "round"], "properties": { "rfq": { "type": "object" }, "quote": { "type": "object" }, "round": { "type": "integer" }, "history": { "type": "array" } } }
+      },
+      "instructions": "You negotiate for the buyer. You get the RFQ (with max_budget), the supplier's current quote and the round number (max 3). If the quote price is at or below max_budget, accept. If it is above, make a counter-offer: start somewhat below the budget in round 1 and move to at most max_budget later. Never offer more than max_budget. If the supplier says the offer is final and it is still above budget, walk away. Keep the message to one short, polite sentence. Reply with {\"action\": \"accept\" | \"counter\" | \"walk_away\", \"counter_price\": <number or null>, \"message\": <string>} and nothing else.",
+      "output_schema": {
+        "type": "object",
+        "required": ["action", "message"],
+        "properties": {
+          "action": { "type": "string", "enum": ["accept", "counter", "walk_away"] },
+          "counter_price": { "type": ["number", "null"] },
+          "message": { "type": "string", "maxLength": 300 }
+        }
+      },
+      "tools": ["request_supplier_quote", "send_counter_offer", "place_order", "http://localhost:62261/diorama_studio"]
+    }
+  ]
+}

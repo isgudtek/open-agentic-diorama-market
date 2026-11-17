@@ -1,0 +1,99 @@
+{
+  "metadata": {
+    "name": "diorama_studio",
+    "description": "Miniature Worlds studio network: designs a procedural 3D diorama from a brief, prices it under the studio's scale rules, negotiates within a 12% discount floor, and operates the live 3D preview and the commission board.",
+    "limits": { "max_negotiation_rounds": 3, "max_discount_pct": 12 }
+  },
+  "tools": [
+    {
+      "name": "diorama_designer",
+      "function": {
+        "description": "Front agent. Translates a commission brief (free text or an RFQ) into a structured 3D scene graph for a procedural diorama.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "brief": { "type": "string", "description": "Free-text commission brief." },
+            "rfq": { "type": "object", "description": "Structured RFQ from a buyer agent." }
+          }
+        }
+      },
+      "instructions": "Translate the commission brief into a scene graph for a procedural diorama. Units are centimetres. The origin is the centre of the base; x runs across the width, z across the depth, y is up. Keep every element inside the base. Use 6 to 18 structures that fit the theme: WWII or war themes use trench, sandbags, ruin and tank; cities use building, ruin and wall; forests use tree and rock; snow scenes use tree, rock and a small building. If the brief asks for water, a river, a lake or resin, set water_feature to true and give water_path as 2 to 4 [x, z] points that cross the base. If it asks for LEDs, lights, explosions, fire or lanterns, add 3 to 6 led_points with y between 1 and 8 and suitable hex colours (explosions #ff6a00 / #ffb000, lanterns #ffd27a). Use the RFQ dimensions exactly when given. Reply with the JSON object only.",
+      "output_schema": {
+        "type": "object",
+        "required": ["title", "base_width", "base_depth", "terrain_type", "water_feature", "led_points", "structures"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 80 },
+          "base_width": { "type": "number" },
+          "base_depth": { "type": "number" },
+          "terrain_type": { "type": "string", "enum": ["desert", "urban", "forest", "snow"] },
+          "water_feature": { "type": "boolean" },
+          "water_path": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } },
+          "led_points": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z", "color"],
+              "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" }, "color": { "type": "string" } }
+            }
+          },
+          "structures": {
+            "type": "array",
+            "maxItems": 24,
+            "items": {
+              "type": "object",
+              "required": ["type", "x", "z"],
+              "properties": {
+                "type": { "type": "string", "enum": ["trench", "sandbags", "ruin", "building", "tree", "rock", "tank", "wall"] },
+                "x": { "type": "number" },
+                "z": { "type": "number" },
+                "width": { "type": "number" },
+                "depth": { "type": "number" },
+                "height": { "type": "number" },
+                "rotation": { "type": "number" }
+              }
+            }
+          }
+        }
+      },
+      "tools": ["diorama_estimator"]
+    },
+    {
+      "name": "diorama_estimator",
+      "function": {
+        "description": "Prices a scene graph (materials + labour hours) under the studio's scale rules and negotiates counter-offers. The studio's code computes the base price and enforces the discount floor; this agent writes the quote message and decides counter-offers above the floor.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "mode": { "type": "string", "enum": ["quote", "negotiate"] },
+            "quote": { "type": "object" },
+            "counter_price": { "type": "number" },
+            "floor_price": { "type": "number" },
+            "round": { "type": "integer" }
+          },
+          "required": ["mode"]
+        }
+      },
+      "instructions": "You are the studio's estimator. In mode \"quote\", explain the given price in one or two friendly sentences (materials, labour hours, lead time) and set decision to \"quote\" and price to the given price. In mode \"negotiate\", the buyer has made a counter-offer. You may accept any counter at or above floor_price. Never go below floor_price: it is the studio's 12% maximum discount. If the counter is below the floor, set decision to \"counter\" and choose a price between floor_price and the current price, moving closer to the buyer each round. Keep the message short and polite. Reply with the JSON object only.",
+      "output_schema": {
+        "type": "object",
+        "required": ["decision", "price", "message"],
+        "properties": {
+          "decision": { "type": "string", "enum": ["quote", "accept", "counter"] },
+          "price": { "type": "number" },
+          "message": { "type": "string", "maxLength": 400 }
+        }
+      },
+      "tools": ["workshop_operator"]
+    },
+    {
+      "name": "workshop_operator",
+      "rule_based": true,
+      "function": {
+        "description": "Operates the workshop: renders the live Three.js preview and keeps the commission board (Incoming RFQ -> 3D Blueprint Approved -> In Fabrication). Deterministic; no model call. Every board write pauses for the studio owner's approval."
+      },
+      "instructions": "Render every new or revised scene with render_diorama_preview. Log incoming RFQs with log_rfq. Lock a build slot with confirm_commission only for a quote whose price was agreed. Move orders to In Fabrication with start_fabrication. Never write to the board without approval.",
+      "tools": ["render_diorama_preview", "get_board", "log_rfq", "confirm_commission", "start_fabrication"]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "open-agentic-dioramas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Two interconnected open agentic websites (procurement hub + 3D diorama studio) with Mozilla Otari, Gemini Nano and Demo Mode. Zero backend, zero dependencies.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node dev-server.js",
+    "verify": "node scripts/verify.mjs",
+    "build": "node scripts/build-sites.mjs",
+    "build:pages": "node scripts/build-sites.mjs --base https://isgudtek.github.io/open-agentic-dioramas/ --out docs",
+    "verify:pages": "node scripts/verify.mjs https://isgudtek.github.io/open-agentic-dioramas/buyer-hub/ https://isgudtek.github.io/open-agentic-dioramas/diorama-studio/",
+    "legacy:taskhub": "npx serve public"
+  }
+}

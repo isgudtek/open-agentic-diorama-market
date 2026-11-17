@@ -29,10 +29,14 @@
 
   <div class="layout">
     <main class="main">
-      <section class="viewer" aria-label="Live 3D diorama preview">
+      <section class="viewer empty" id="viewer" aria-label="Live 3D diorama preview">
         <div id="viewport" class="viewport"></div>
+        <div id="vpEmpty" class="vp-empty" role="status">
+          <span class="vp-empty-mark" aria-hidden="true"></span>
+          <p>The model you requested will appear here</p>
+        </div>
         <div class="vp-overlay top">
-          <p id="vpTitle" class="vp-title">Loading 3D studio…</p>
+          <p id="vpTitle" class="vp-title"></p>
           <p id="vpMeta" class="vp-meta"></p>
         </div>
         <div class="vp-overlay bottom">

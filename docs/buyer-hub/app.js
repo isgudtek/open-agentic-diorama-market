@@ -2,9 +2,9 @@
  * OpenAgentic Procurement & Commission Hub (Site A).
  * intake_agent -> discovery_agent -> negotiator_agent, driving the supplier's agents over postMessage RPC.
  */
-import { AgentRuntime, RpcClient, serveRpc, exposeGlobal, fetchJson, validateManifest, OawError } from "./shared/oaw-core.js?v=748213ee79";
-import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=748213ee79";
-import * as H from "./hub-logic.js?v=748213ee79";
+import { AgentRuntime, RpcClient, serveRpc, exposeGlobal, fetchJson, validateManifest, OawError } from "./shared/oaw-core.js?v=3ccc351ccd";
+import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=3ccc351ccd";
+import * as H from "./hub-logic.js?v=3ccc351ccd";
 
 const BUILD = document.querySelector('meta[name="oaw-build"]')?.content || "dev";
 const manifest = await (await fetch("./agent-manifest.json", { cache: "no-store" })).json();

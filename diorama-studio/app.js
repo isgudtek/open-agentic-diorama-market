@@ -34,10 +34,12 @@ try {
   const { createViewer } = await import("./scene.js");
   viewer = createViewer(vp);
 } catch (e) {
+  $("#vpEmpty").hidden = true;
   vp.append(h("div", { class: "vp-error" }, h("strong", { text: "3D preview unavailable" }), h("span", { text: ` Three.js loads from cdn.jsdelivr.net (${e.message}). Agents, quotes and the board still work.` })));
 }
 function showScene(scene, label) {
   const stats = viewer ? viewer.render(scene) : null;
+  $("#viewer").classList.remove("empty");
   $("#vpTitle").textContent = scene.title;
   $("#vpMeta").textContent = `${label ? `${label} · ` : ""}${scene.terrain_type} · ${scene.base_width}×${scene.base_depth} cm · ${scene.structures.length} structures${scene.water_feature ? " · resin water" : ""}${scene.led_points.length ? ` · ${scene.led_points.length} LEDs` : ""}`;
   $("#vpStats").textContent = stats ? `${stats.triangles.toLocaleString()} triangles` : "";
@@ -300,8 +302,7 @@ exposeGlobal({
 /* ----------------------------------------------------------------- boot */
 
 drawBoard();
-drawQuote(null);
-showScene(L.normalizeScene(L.designDeterministic({ brief: "1:35 WWII desert trench diorama 40x40cm with a resin river and LED explosions" }), {}), "Showroom sample");
+drawQuote(null); // the viewport shows "The model you requested will appear here" until a quote renders
 await runtime.probeNano();
 stream.add({ type: "note", text: `Build ${BUILD} · network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label}${embedded ? " · embedded by a buyer site" : ""}` });
 document.body.dataset.ready = "true";

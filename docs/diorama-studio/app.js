@@ -1,9 +1,9 @@
 /**
  * Miniature Worlds (Site B): agents, tools, the commission board, the live 3D viewport and the RPC surface.
  */
-import { AgentRuntime, serveRpc, exposeGlobal, OawError, uid } from "./shared/oaw-core.js?v=748213ee79";
-import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=748213ee79";
-import * as L from "./studio-logic.js?v=748213ee79";
+import { AgentRuntime, serveRpc, exposeGlobal, OawError, uid } from "./shared/oaw-core.js?v=3ccc351ccd";
+import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=3ccc351ccd";
+import * as L from "./studio-logic.js?v=3ccc351ccd";
 
 const embedded = window.parent !== window || new URLSearchParams(location.search).has("embedded");
 document.body.classList.toggle("embedded", embedded);
@@ -31,13 +31,15 @@ const quotes = new Map(); // quote_id -> internal quote (includes the floor, nev
 let viewer = null;
 const vp = $("#viewport");
 try {
-  const { createViewer } = await import("./scene.js?v=748213ee79");
+  const { createViewer } = await import("./scene.js?v=3ccc351ccd");
   viewer = createViewer(vp);
 } catch (e) {
+  $("#vpEmpty").hidden = true;
   vp.append(h("div", { class: "vp-error" }, h("strong", { text: "3D preview unavailable" }), h("span", { text: ` Three.js loads from cdn.jsdelivr.net (${e.message}). Agents, quotes and the board still work.` })));
 }
 function showScene(scene, label) {
   const stats = viewer ? viewer.render(scene) : null;
+  $("#viewer").classList.remove("empty");
   $("#vpTitle").textContent = scene.title;
   $("#vpMeta").textContent = `${label ? `${label} · ` : ""}${scene.terrain_type} · ${scene.base_width}×${scene.base_depth} cm · ${scene.structures.length} structures${scene.water_feature ? " · resin water" : ""}${scene.led_points.length ? ` · ${scene.led_points.length} LEDs` : ""}`;
   $("#vpStats").textContent = stats ? `${stats.triangles.toLocaleString()} triangles` : "";
@@ -300,8 +302,7 @@ exposeGlobal({
 /* ----------------------------------------------------------------- boot */
 
 drawBoard();
-drawQuote(null);
-showScene(L.normalizeScene(L.designDeterministic({ brief: "1:35 WWII desert trench diorama 40x40cm with a resin river and LED explosions" }), {}), "Showroom sample");
+drawQuote(null); // the viewport shows "The model you requested will appear here" until a quote renders
 await runtime.probeNano();
 stream.add({ type: "note", text: `Build ${BUILD} · network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label}${embedded ? " · embedded by a buyer site" : ""}` });
 document.body.dataset.ready = "true";

@@ -256,8 +256,9 @@ class NanoProvider {
 
 /** Mozilla Otari gateway: OpenAI-compatible POST {baseUrl}/chat/completions with the user's key. */
 class OtariProvider {
-  constructor({ baseUrl, apiKey, model }) {
+  constructor({ baseUrl, apiKey, model }, { onRegion } = {}) {
     this.id = "otari"; this.short = "otari";
+    this.onRegion = onRegion;
     this.baseUrl = String(baseUrl || OTARI_REGIONS.global).replace(/\/+$/, "");
     this.apiKey = String(apiKey || "");
     this.model = String(model || OTARI_MODELS[0]);
@@ -280,7 +281,7 @@ class OtariProvider {
     const onAbort = () => ctl.abort();
     signal?.addEventListener("abort", onAbort, { once: true });
     const timer = setTimeout(() => ctl.abort(), 60000);
-    const post = (b) => fetch(`${this.baseUrl}/chat/completions`, {
+    const post = (b) => fetch(`${this.baseUrl}/chat/completions`, { // reads this.baseUrl at call time
       method: "POST", signal: ctl.signal, credentials: "omit", referrerPolicy: "no-referrer",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify(b),
@@ -288,6 +289,14 @@ class OtariProvider {
     try {
       let res = await post(body);
       let text = await res.text();
+      const region = res.status === 421 ? otariRegionFrom(text) : null;
+      if (region && region !== this.baseUrl) {
+        // Otari says the key lives in another of its regions: retry there once and remember it.
+        this.baseUrl = region;
+        this.onRegion?.(region);
+        res = await post(body);
+        text = await res.text();
+      }
       if (res.status === 400 && /response_format/i.test(text)) { delete body.response_format; res = await post(body); text = await res.text(); }
       if (!res.ok) throw otariError(res.status, text, this.apiKey, this.model);
       const j = JSON.parse(text);
@@ -295,7 +304,7 @@ class OtariProvider {
       const json = extractJson(content);
       if (!json) throw new OawError("OTARI_BAD_OUTPUT", `Otari model did not return JSON: ${String(content).slice(0, 140)}`);
       const cost = Number(j.usage?.cost ?? j.usage?.total_cost);
-      return { json, telemetry: { provider: "otari", model: j.model || this.model, ms: Math.round(performance.now() - t0), tokens_in: j.usage?.prompt_tokens ?? estimateTokens(prompt), tokens_out: j.usage?.completion_tokens ?? estimateTokens(content), cost: Number.isFinite(cost) ? cost : null, simulated: false, estimated: !j.usage } };
+      return { json, baseUrl: this.baseUrl, telemetry: { provider: "otari", model: j.model || this.model, ms: Math.round(performance.now() - t0), tokens_in: j.usage?.prompt_tokens ?? estimateTokens(prompt), tokens_out: j.usage?.completion_tokens ?? estimateTokens(content), cost: Number.isFinite(cost) ? cost : null, simulated: false, estimated: !j.usage } };
     } catch (e) {
       if (e instanceof OawError) throw e;
       if (signal?.aborted) throw abortError();
@@ -318,21 +327,29 @@ export function testOtari(otari) {
  * gateway pick any provider that serves the model. Returns [{ id, name, context_window, json }].
  */
 export async function listOtariModels({ baseUrl, apiKey }) {
-  const base = String(baseUrl || "").replace(/\/+$/, "");
+  let base = String(baseUrl || "").replace(/\/+$/, "");
   if (!apiKey) throw new OawError("SETUP", "Enter your Otari API key first.");
-  let res;
-  try {
-    res = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${apiKey}` }, credentials: "omit", referrerPolicy: "no-referrer" });
-  } catch (e) {
-    throw new OawError("OTARI_NETWORK", `Could not reach ${base}. ${redact(e?.message, apiKey)}`);
-  }
-  const text = await res.text();
+  const get = async () => {
+    try { return await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${apiKey}` }, credentials: "omit", referrerPolicy: "no-referrer" }); }
+    catch (e) { throw new OawError("OTARI_NETWORK", `Could not reach ${base}. ${redact(e?.message, apiKey)}`); }
+  };
+  let res = await get();
+  let text = await res.text();
+  const region = res.status === 421 ? otariRegionFrom(text) : null;
+  if (region && region !== base) { base = region; res = await get(); text = await res.text(); }
   if (!res.ok) throw otariError(res.status, text, apiKey, null);
   const data = JSON.parse(text).data || [];
-  return data
+  const models = data
     .filter((m) => !m.type || /chat|text|llm|language/i.test(String(m.type)))
     .map((m) => ({ id: m.id, name: typeof m.name === "string" ? m.name : m.id, context_window: Number(m.context_window) || null, json: Array.isArray(m.supported_parameters) ? m.supported_parameters.includes("response_format") : null }))
     .sort((a, b) => a.id.localeCompare(b.id));
+  return { models, baseUrl: base };
+}
+
+/** Region base URL named by a 421 response, only if it is one of Otari's own API hosts. */
+export function otariRegionFrom(text) {
+  const host = (String(text || "").match(/belongs to ([a-z0-9.-]+)/i) || [])[1]?.toLowerCase().replace(/\.$/, "");
+  return host && /^([a-z]{2,10}\.)?api\.otari\.ai$/.test(host) ? `https://${host}/api/v1` : null;
 }
 
 /** Turn an Otari error response into a message that says what to do. */
@@ -340,7 +357,8 @@ function otariError(status, text, apiKey, model) {
   let detail = text;
   try { const j = JSON.parse(text); detail = j.detail?.message || j.detail || j.error?.message || text; } catch { /* raw */ }
   detail = redact(typeof detail === "string" ? detail : JSON.stringify(detail), apiKey).slice(0, 240);
-  const region = (detail.match(/belongs to ([a-z0-9.-]+\.otari\.ai)/i) || [])[1];
+  const regionUrl = otariRegionFrom(detail);
+  const region = regionUrl ? new URL(regionUrl).host : null;
   const hint = {
     401: "Otari rejected the API key.",
     403: "This key may not use that model.",
@@ -452,7 +470,12 @@ export class AgentRuntime {
   }
   provider() {
     const s = this.settings;
-    const otari = new OtariProvider(s.otari);
+    const otari = new OtariProvider(s.otari, {
+      onRegion: (baseUrl) => {
+        saveSettings(this.settingsKey, { ...s, otari: { ...s.otari, baseUrl } }, this.storage);
+        this.emit({ type: "note", text: `Your Otari key belongs to ${new URL(baseUrl).host}; switched the base URL there and saved it.` });
+      },
+    });
     switch (this.effectiveMode()) {
       case "otari": return otari;
       case "nano": return this.nano.status === "available" ? this.nanoProvider : new NanoSimProvider();

@@ -84,19 +84,21 @@ export function negotiatorDeterministic({ rfq, quote, round }) {
  * Buyer policy on any negotiator proposal:
  *  - no budget, or price within budget -> accept
  *  - never accept above budget (converted to a counter at the budget)
- *  - counters stay between 1 and min(budget, price - 1)
+ *  - counters stay between 60% of the current price and min(budget, price - 1); a missing counter means the budget
  *  - a final offer above budget, or too many rounds -> walk away
  */
 export function enforceBuyerPolicy(out, { price, budget, final, round }) {
   if (budget == null || price <= budget) return { action: "accept", counter_price: null, message: out?.message || "Accepted.", policy: out?.action && out.action !== "accept" ? "Price is within budget; accepting." : null };
   if (final || round > MAX_ROUNDS) return { action: "walk_away", counter_price: null, message: out?.message || "Above budget.", policy: out?.action !== "walk_away" ? `Final offer ${price} is above the budget ${budget}; walking away.` : null };
   if (out?.action === "walk_away") return { action: "walk_away", counter_price: null, message: out.message || "", policy: null };
-  let c = Number(out?.counter_price);
+  const raw = out?.counter_price;
+  let c = raw === null || raw === undefined || raw === "" ? NaN : Number(raw); // Number(null) would be 0
   let policy = null;
   if (out?.action === "accept") { c = budget; policy = `Negotiator tried to accept ${price}, above the budget ${budget}; countering at the budget instead.`; }
-  if (!Number.isFinite(c)) { c = budget; policy = policy || "No counter price given; using the budget."; }
+  if (!Number.isFinite(c) || c <= 0) { c = budget; policy = policy || "No counter price given; using the budget."; }
   const hi = Math.min(budget, price - 1);
-  const clamped = Math.round(Math.min(hi, Math.max(1, c)));
+  const lo = Math.min(hi, Math.round(price * 0.6)); // no insulting lowballs
+  const clamped = Math.round(Math.min(hi, Math.max(lo, c)));
   if (clamped !== Math.round(c) && !policy) policy = `Counter ${Math.round(c)} adjusted to ${clamped} (within budget and below the current price).`;
   return { action: "counter", counter_price: clamped, message: String(out?.message || "").slice(0, 300), policy };
 }

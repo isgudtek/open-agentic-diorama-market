@@ -218,7 +218,7 @@ export function createSettings({ runtime, onSaved }) {
       h("button", { class: "oaw-btn small", type: "button", text: "EU", onclick: () => { baseUrl.value = OTARI_REGIONS.eu; } })),
     h("label", { for: "oaw-otari-key", text: "API key (sent as Authorization: Bearer)" }),
     h("div", { class: "oaw-row" }, apiKey, h("button", { class: "oaw-btn small", type: "button", text: "Show", onclick: (e) => { apiKey.type = apiKey.type === "password" ? "text" : "password"; e.target.textContent = apiKey.type === "password" ? "Show" : "Hide"; } })),
-    h("label", { for: "oaw-otari-model", text: "Model (Otari uses provider:model)" }),
+    h("label", { for: "oaw-otari-model", text: "Model" }),
     h("div", { class: "oaw-row" }, modelSel, loadBtn), modelCustom,
     h("p", { class: "oaw-muted small", text: "provider/model (catalog id) lets Otari route to any provider your organization has; provider:model pins one provider." }),
     h("div", { class: "oaw-row" }, h("button", { class: "oaw-btn", type: "button", text: "Test connection", onclick: () => test() })),
@@ -269,19 +269,24 @@ export function createSettings({ runtime, onSaved }) {
     showPanels(); drawNano();
   };
   const collect = () => ({ mode: mode(), otari: { baseUrl: baseUrl.value.trim(), apiKey: apiKey.value.trim(), model: model() } });
-  async function loadModels() {
+  async function loadModels(opts = {}) {
     testOut.className = "oaw-test busy";
     testOut.textContent = "Loading models…";
     loadBtn.disabled = true;
     try {
       const keep = model();
-      modelList = await listOtariModels(collect().otari);
+      const r = await listOtariModels(collect().otari);
+      modelList = r.models;
+      const switched = r.baseUrl !== baseUrl.value.trim().replace(/\/+$/, "");
+      if (switched) baseUrl.value = r.baseUrl;
       if (!modelList.length) throw new Error("This key has no models. Add a provider in the Otari dashboard.");
       fillModels(modelList.some((m) => m.id === keep) ? keep : (modelList.find((m) => m.json) || modelList[0]).id);
       testOut.className = "oaw-test ok";
-      testOut.textContent = `Loaded ${modelList.length} models your key can use. Pick one, then Test connection.`;
+      testOut.textContent = `${switched ? `Your key is in ${new URL(r.baseUrl).host}; switched there. ` : ""}Loaded ${modelList.length} models your key can use${opts.thenTest ? "; testing the selected one…" : ". Pick one, then Test connection."}`;
+      return true;
     } catch (e) {
       showError(e);
+      return false;
     } finally { loadBtn.disabled = false; }
   }
   function showError(e) {
@@ -290,18 +295,25 @@ export function createSettings({ runtime, onSaved }) {
     if (e.region) testOut.append(h("button", { class: "oaw-btn small", type: "button", text: `Switch to ${new URL(e.region).host} and retry`, onclick: () => { baseUrl.value = e.region; test(); } }));
     if (e.code === "OTARI_424" || e.code === "OTARI_404") testOut.append(h("button", { class: "oaw-btn small", type: "button", text: "Load my models", onclick: () => loadModels() }));
   }
-  async function test() {
+  async function test(retried = false) {
     testOut.className = "oaw-test busy";
     testOut.textContent = "Testing…";
     try {
       const r = await testOtari(collect().otari); // unsaved values; nothing is stored by a test
+      const switched = r.baseUrl && r.baseUrl !== baseUrl.value.trim().replace(/\/+$/, "");
+      if (switched) baseUrl.value = r.baseUrl;
       testOut.className = "oaw-test ok";
-      testOut.textContent = `Connected: ${r.telemetry.model || model()} answered in ${r.telemetry.ms} ms ${JSON.stringify(r.json)}`;
+      testOut.textContent = `Connected${switched ? ` (switched to ${new URL(r.baseUrl).host}, where your key lives)` : ""}: ${r.telemetry.model || model()} answered in ${r.telemetry.ms} ms ${JSON.stringify(r.json)}. Press Save to use it.`;
     } catch (e) {
+      // No credential for this model's provider, or unknown model: load the key's own models and retry once.
+      if ((e.code === "OTARI_424" || e.code === "OTARI_404") && !retried) {
+        if (await loadModels({ thenTest: true })) return test(true);
+      }
       showError(e);
     }
   }
   radios.forEach((r) => r.querySelector("input").addEventListener("change", showPanels));
+  apiKey.addEventListener("change", () => { if (apiKey.value.trim().length >= 8) loadModels(); });
   modelSel.addEventListener("change", () => { modelCustom.hidden = modelSel.value !== "__custom"; if (!modelCustom.hidden) modelCustom.focus(); });
   nanoInit.addEventListener("click", async () => { try { await runtime.initNano(); } catch (e) { msg.className = "oaw-msg"; msg.textContent = e.message; } });
   runtime.on((e) => { if (e.type === "nano_status") drawNano(); });

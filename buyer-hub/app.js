@@ -6,6 +6,7 @@ import { AgentRuntime, RpcClient, serveRpc, exposeGlobal, fetchJson, validateMan
 import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js";
 import * as H from "./hub-logic.js";
 
+const BUILD = document.querySelector('meta[name="oaw-build"]')?.content || "dev";
 const manifest = await (await fetch("./agent-manifest.json", { cache: "no-store" })).json();
 const network = await (await fetch(`./${manifest.networks[0].hocon}`, { cache: "no-store" })).json();
 const host = (u) => { try { return new URL(u).host; } catch { return u; } };
@@ -47,6 +48,7 @@ function openSplit(url) {
   if (!frame || frameOrigin !== o) {
     const u = new URL(url.endsWith("/") ? url : `${url}/`); // the site's folder, no redirect needed
     u.searchParams.set("embedded", "1");
+    if (BUILD !== "dev") u.searchParams.set("v", BUILD); // never reuse a stale cached studio page
     frame = h("iframe", { src: u.href, title: "Supplier site (live)", class: "peer-frame" });
     frameOrigin = o;
     const c = clients.get(o);
@@ -434,6 +436,6 @@ drawDeal();
 drawRegistry();
 drawOrders();
 await runtime.probeNano();
-stream.add({ type: "note", text: `Network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label} · suppliers: ${registry.map((u) => host(u) + new URL(u).pathname.replace(/\/$/, "")).join(", ")}` });
+stream.add({ type: "note", text: `Build ${BUILD} · network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label} · suppliers: ${registry.map((u) => host(u) + new URL(u).pathname.replace(/\/$/, "")).join(", ")}` });
 if (skipped.length) stream.add({ type: "note", text: `Ignored saved localhost supplier(s) on this public page: ${skipped.join(", ")}` });
 document.body.dataset.ready = "true";

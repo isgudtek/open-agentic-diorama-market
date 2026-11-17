@@ -9,7 +9,8 @@
  * Output: <out>/index.html (landing), <out>/buyer-hub/, <out>/diorama-studio/, each with .well-known/agent-manifest.json,
  * plus <out>/.nojekyll so GitHub Pages publishes the .well-known folders.
  */
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -53,6 +54,26 @@ for (const site of ["buyer-hub", "diorama-studio"]) {
 }
 
 writeFileSync(join(out, ".nojekyll"), "");
+
+/*
+ * Cache busting. GitHub Pages serves everything with Cache-Control: max-age=600, so a browser can keep old modules
+ * for 10 minutes after a deploy. Every local .js/.css reference gets ?v=<content hash>; all imports of one module use
+ * the same URL, so each module still loads once. The hash also goes into <meta name="oaw-build"> for the UI.
+ */
+const files = [];
+const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else files.push(p); } };
+for (const site of ["buyer-hub", "diorama-studio"]) walk(join(out, site));
+const build = createHash("sha256").update(files.sort().map((f) => readFileSync(f)).join("\u0000")).digest("hex").slice(0, 10);
+const stampJs = (src) => src.replace(/((?:from|import)\s*\(?\s*)"(\.{1,2}\/[^"?]+\.js)"/g, `$1"$2?v=${build}"`);
+for (const f of files) {
+  if (f.endsWith(".js")) writeFileSync(f, stampJs(readFileSync(f, "utf8")));
+  if (f.endsWith("index.html")) {
+    let html = readFileSync(f, "utf8")
+      .replace(/(href|src)="((?!https?:|data:|\/\/)[^"?]+\.(?:css|js))"/g, `$1="$2?v=${build}"`)
+      .replace("<meta charset=\"utf-8\">", `<meta charset="utf-8">\n  <meta name="oaw-build" content="${build}">`);
+    writeFileSync(f, html);
+  }
+}
 writeFileSync(join(out, "index.html"), `<!doctype html>
 <html lang="en">
 <head>
@@ -86,7 +107,7 @@ writeFileSync(join(out, "index.html"), `<!doctype html>
 </html>
 `);
 
-console.log(`Built ${out}`);
+console.log(`Built ${out}  (build ${build})`);
 console.log(`  Hub:    ${HUB_URL}`);
 console.log(`  Studio: ${STUDIO_URL}  (supplier ${STUDIO_ID}, trusts ${new URL(HUB_URL).origin})`);
 if (!existsSync(join(out, "buyer-hub", "shared", "oaw-core.js"))) throw new Error("shared/ was not copied");

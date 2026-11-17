@@ -8,6 +8,7 @@ import * as L from "./studio-logic.js";
 const embedded = window.parent !== window || new URLSearchParams(location.search).has("embedded");
 document.body.classList.toggle("embedded", embedded);
 
+const BUILD = document.querySelector('meta[name="oaw-build"]')?.content || "dev";
 const manifest = await (await fetch("./agent-manifest.json", { cache: "no-store" })).json();
 const network = await (await fetch(`./${manifest.networks[0].hocon}`, { cache: "no-store" })).json();
 const host = (origin) => { try { return new URL(origin).host; } catch { return origin; } };
@@ -302,5 +303,5 @@ drawBoard();
 drawQuote(null);
 showScene(L.normalizeScene(L.designDeterministic({ brief: "1:35 WWII desert trench diorama 40x40cm with a resin river and LED explosions" }), {}), "Showroom sample");
 await runtime.probeNano();
-stream.add({ type: "note", text: `Network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label}${embedded ? " · embedded by a buyer site" : ""}` });
+stream.add({ type: "note", text: `Build ${BUILD} · network "${network.metadata.name}" loaded from agent-manifest.json · ${runtime.describeProvider().label}${embedded ? " · embedded by a buyer site" : ""}` });
 document.body.dataset.ready = "true";

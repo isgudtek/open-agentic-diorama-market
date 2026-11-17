@@ -101,7 +101,8 @@ async function rpc(url, method, params) {
   const t0 = performance.now();
   try {
     const r = await c.call(method, params);
-    runtime.emit({ type: "rpc", direction: "out", method: `${method} ✓`, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0) });
+    const failed = r && typeof r === "object" && ["failed", "rejected"].includes(r.status);
+    runtime.emit({ type: "rpc", direction: "out", method: failed ? `${method} → ${r.status}` : `${method} ✓`, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0), ok: !failed });
     return r;
   } catch (e) {
     runtime.emit({ type: "rpc", direction: "out", method, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0), ok: false });

@@ -1,7 +1,7 @@
 /**
  * oaw-ui.js: shared UI for both sites. All model/peer text is rendered with textContent, never as HTML.
  */
-import { OTARI_REGIONS, OTARI_MODELS, validateManifest, testOtari, listOtariModels, cleanApiKey } from "./oaw-core.js?v=b6fb620df5";
+import { OTARI_REGIONS, OTARI_MODELS, validateManifest, testOtari, listOtariModels, cleanApiKey } from "./oaw-core.js?v=b0749dd31e";
 
 export function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -24,7 +24,7 @@ export function telemetryText(t) {
   const parts = [t.provider];
   if (t.model && t.provider === "otari") parts.push(t.model);
   parts.push(`${t.ms}ms`);
-  if (t.route) parts.push(t.route === "local" ? "hybrid→local" : "hybrid→cloud");
+  if (t.route) parts.push({ local: "hybrid→local", cloud: "hybrid→cloud", fallback: "fallback" }[t.route] || t.route);
   if (t.tokens_in || t.tokens_out) parts.push(`${(t.tokens_in || 0) + (t.tokens_out || 0)} tok${t.estimated ? " est." : ""}`);
   if (t.simulated) parts.push("simulated");
   if (t.cost === 0) parts.push("$0.00");
@@ -170,7 +170,7 @@ export function createStatusPill(el, runtime) {
     const text = {
       otari: `Mozilla Otari · ${runtime.settings.otari.model}`,
       nano: d.id === "nano" ? "Gemini Nano · On-Device" : "Gemini Nano (Local Sim)",
-      hybrid: "Hybrid Auto · Nano → Otari",
+      hybrid: runtime.settings.otari.apiKey ? "Hybrid Auto · Nano → Otari" : d.automatic ? "Auto · Nano → Demo" : "Hybrid Auto · Nano → Otari",
       demo: "Demo Mode · no key",
     }[d.mode];
     el.textContent = `${text}${d.automatic ? " · auto" : ""}`;

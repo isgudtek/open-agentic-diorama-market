@@ -238,7 +238,7 @@ class NanoProvider {
   }
   async generate({ agent, system, prompt, schema, signal }) {
     const t0 = performance.now();
-    const sys = `${system}\nReply with exactly one JSON object and no other text, no markdown.`;
+    const sys = `${system}\nReply with exactly one JSON object and no other text, no markdown. Keep it compact: short strings, at most 8 items in any list.`;
     let session;
     try {
       session = await createNanoSession({ system: sys, signal });
@@ -393,32 +393,47 @@ function otariError(status, text, apiKey, model) {
 }
 
 /** Hybrid Auto: Gemini Nano on the device first; Otari in the cloud when Nano is unavailable or fails. */
+const NANO_TIMEOUT_MS = 30000;
+const NANO_COOLDOWN_MS = 5 * 60 * 1000;
+
 class HybridProvider {
-  constructor({ nano, otari, nanoStatus, onEvent }) {
+  /** demoFallback: used for the automatic default, so a visitor without a key still gets an answer. */
+  constructor({ nano, otari, nanoStatus, onEvent, demoFallback = false, cooldown }) {
     this.id = "hybrid"; this.short = "hybrid";
     this.nano = nano; this.otari = otari; this.nanoStatus = nanoStatus; this.onEvent = onEvent;
-    this.label = `Hybrid Auto · Nano → ${otari.configured ? `Otari ${otari.model}` : "Otari (no key yet)"}`;
+    this.demoFallback = demoFallback && !otari.configured;
+    this.cooldown = cooldown; // { until } shared by the runtime: skip Nano for a while after it failed
+    this.label = `Hybrid Auto · Nano → ${otari.configured ? `Otari ${otari.model}` : this.demoFallback ? "Demo Mode (no Otari key)" : "Otari (no key yet)"}`;
   }
   async generate(req) {
-    if (this.nanoStatus() === "available") {
+    const cooling = this.cooldown && Date.now() < this.cooldown.until;
+    if (cooling) {
+      this.onEvent?.({ type: "fallback", agent: req.agent, from: "Gemini Nano", to: this.otari.configured ? "Mozilla Otari" : "Demo Mode", reason: `Nano failed recently; skipping it for ${Math.ceil((this.cooldown.until - Date.now()) / 60000)} more min` });
+    } else if (this.nanoStatus() === "available") {
       const ctl = new AbortController();
       const onAbort = () => ctl.abort();
       req.signal?.addEventListener("abort", onAbort, { once: true });
-      const timer = setTimeout(() => ctl.abort(), 25000);
+      const timer = setTimeout(() => ctl.abort(), NANO_TIMEOUT_MS);
       try {
         const r = await this.nano.generate({ ...req, signal: ctl.signal });
         r.telemetry.route = "local";
         return r;
       } catch (e) {
         if (req.signal?.aborted) throw e;
-        const why = ctl.signal.aborted ? "no answer within 25 s" : `${e.code || e.name}: ${String(e.message).slice(0, 120)}`;
-        this.onEvent?.({ type: "fallback", agent: req.agent, from: "Gemini Nano", to: "Mozilla Otari", reason: why });
+        const why = ctl.signal.aborted ? `no answer within ${NANO_TIMEOUT_MS / 1000} s` : `${e.code || e.name}: ${String(e.message).slice(0, 120)}`;
+        if (this.cooldown) this.cooldown.until = Date.now() + NANO_COOLDOWN_MS;
+        this.onEvent?.({ type: "fallback", agent: req.agent, from: "Gemini Nano", to: this.otari.configured ? "Mozilla Otari" : this.demoFallback ? "Demo Mode" : "Mozilla Otari", reason: why });
       } finally {
         clearTimeout(timer);
         req.signal?.removeEventListener("abort", onAbort);
       }
     } else {
-      this.onEvent?.({ type: "fallback", agent: req.agent, from: "Gemini Nano", to: "Mozilla Otari", reason: `Nano is ${this.nanoStatus()} on this device` });
+      this.onEvent?.({ type: "fallback", agent: req.agent, from: "Gemini Nano", to: this.otari.configured ? "Mozilla Otari" : this.demoFallback ? "Demo Mode" : "Mozilla Otari", reason: `Nano is ${this.nanoStatus()} on this device` });
+    }
+    if (!this.otari.configured && this.demoFallback) {
+      const r = await new DemoProvider().generate(req);
+      r.telemetry.route = "fallback";
+      return r;
     }
     if (!this.otari.configured) throw new OawError("SETUP", "Hybrid Auto: Gemini Nano could not answer and no Mozilla Otari key is set. Add a key in Model settings or switch to Demo Mode.");
     const r = await this.otari.generate(req);
@@ -450,6 +465,7 @@ export class AgentRuntime {
     this.listeners = new Set();
     this.nano = { status: "unknown", reason: "", progress: 0 };
     this.nanoProvider = new NanoProvider({ onEvent: (e) => this.emit(e) });
+    this.nanoCooldown = { until: 0 };
     this.stats = { runs: 0, agentCalls: 0, toolCalls: 0, approvals: 0 };
     this.lastRun = null;
   }
@@ -481,10 +497,14 @@ export class AgentRuntime {
     } finally { await this.probeNano(); }
   }
 
-  /** Mode actually in effect: explicit choice, else Hybrid when Nano is ready, else Demo. */
+  /**
+   * Mode actually in effect. An explicit choice wins. Automatic default: Otari when a key is set (don't make a
+   * keyed visitor wait on the local model), else Nano with a Demo fallback when Nano is ready, else Demo.
+   */
   effectiveMode() {
     const s = this.settings;
     if (s.mode) return s.mode;
+    if (s.otari.apiKey) return "otari";
     return this.nano.status === "available" ? "hybrid" : "demo";
   }
   provider() {
@@ -498,7 +518,7 @@ export class AgentRuntime {
     switch (this.effectiveMode()) {
       case "otari": return otari;
       case "nano": return this.nano.status === "available" ? this.nanoProvider : new NanoSimProvider();
-      case "hybrid": return new HybridProvider({ nano: this.nanoProvider, otari, nanoStatus: () => this.nano.status, onEvent: (e) => this.emit(e) });
+      case "hybrid": return new HybridProvider({ nano: this.nanoProvider, otari, nanoStatus: () => this.nano.status, onEvent: (e) => this.emit(e), demoFallback: !s.mode, cooldown: this.nanoCooldown });
       default: return new DemoProvider();
     }
   }
@@ -508,7 +528,8 @@ export class AgentRuntime {
     let ok = true, note = "";
     if (mode === "otari" && !p.configured) { ok = false; note = "Add an Otari API key."; }
     if (mode === "nano" && p.id === "nano-sim") note = "Chrome's on-device model is not available here, so a labeled simulation runs. No model is called.";
-    if (mode === "hybrid" && this.nano.status !== "available" && !p.otari.configured) { ok = false; note = "Nano is not ready and no Otari key is set."; }
+    if (mode === "hybrid" && this.nano.status !== "available" && !p.otari.configured && !p.demoFallback) { ok = false; note = "Nano is not ready and no Otari key is set."; }
+    if (mode === "hybrid" && p.demoFallback) note = "Automatic: Gemini Nano first; without an Otari key, Demo Mode answers when Nano can't.";
     return { mode, id: p.id, label: p.label, ok, note, automatic: !this.settings.mode };
   }
 

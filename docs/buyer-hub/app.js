@@ -2,9 +2,9 @@
  * OpenAgentic Procurement & Commission Hub (Site A).
  * intake_agent -> discovery_agent -> negotiator_agent, driving the supplier's agents over postMessage RPC.
  */
-import { AgentRuntime, RpcClient, serveRpc, exposeGlobal, fetchJson, validateManifest, OawError } from "./shared/oaw-core.js?v=b6fb620df5";
-import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=b6fb620df5";
-import * as H from "./hub-logic.js?v=b6fb620df5";
+import { AgentRuntime, RpcClient, serveRpc, exposeGlobal, fetchJson, validateManifest, OawError } from "./shared/oaw-core.js?v=b0749dd31e";
+import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=b0749dd31e";
+import * as H from "./hub-logic.js?v=b0749dd31e";
 
 const BUILD = document.querySelector('meta[name="oaw-build"]')?.content || "dev";
 const manifest = await (await fetch("./agent-manifest.json", { cache: "no-store" })).json();
@@ -101,7 +101,8 @@ async function rpc(url, method, params) {
   const t0 = performance.now();
   try {
     const r = await c.call(method, params);
-    runtime.emit({ type: "rpc", direction: "out", method: `${method} ✓`, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0) });
+    const failed = r && typeof r === "object" && ["failed", "rejected"].includes(r.status);
+    runtime.emit({ type: "rpc", direction: "out", method: failed ? `${method} → ${r.status}` : `${method} ✓`, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0), ok: !failed });
     return r;
   } catch (e) {
     runtime.emit({ type: "rpc", direction: "out", method, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0), ok: false });

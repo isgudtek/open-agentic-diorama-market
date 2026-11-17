@@ -1,27 +1,33 @@
-# Open Agentic Dioramas
+# Open Agentic Diorama Market
 
-Two independent, static agentic websites that find each other through their public `agent-manifest.json` and negotiate in the visitor's browser. There is no backend and there are no dependencies. Built for the [Cognizant Open Agentic Web Challenge](https://github.com/cognizant-ai-labs/agentic-web).
+Three independent, static agentic websites: a buyer hub and two competing diorama studios. They find each other through their public `agent-manifest.json` files and do business in the visitor's browser. The hub asks both studios for a quote, both design their own 3D diorama side by side, you choose one, and the hub negotiates and asks you to approve the order. There is no backend and there are no dependencies. Built for the [Cognizant Open Agentic Web Challenge](https://github.com/cognizant-ai-labs/agentic-web).
+
+> The earlier single-studio version is archived at [isgudtek/open-agentic-dioramas](https://github.com/isgudtek/open-agentic-dioramas) (tag `v1-single-shop`), live at https://isgudtek.github.io/open-agentic-dioramas/.
 
 | Site | Role | Local | Live |
 | --- | --- | --- | --- |
-| **OpenAgentic Procurement & Commission Hub** (`buyer-hub/`) | Buyer agents: RFQ, supplier discovery, negotiation, approved order | http://localhost:62260 | https://isgudtek.github.io/open-agentic-dioramas/buyer-hub/ |
-| **Miniature Worlds 3D Diorama Studio** (`diorama-studio/`) | Supplier agents: 3D blueprint, quote, counter-offers, commission board | http://localhost:62261 | https://isgudtek.github.io/open-agentic-dioramas/diorama-studio/ |
+| **OpenAgentic Procurement & Commission Hub** (`buyer-hub/`) | Buyer agents: RFQ, supplier discovery, quote comparison, negotiation, approved order | http://localhost:62260 | https://isgudtek.github.io/open-agentic-diorama-market/buyer-hub/ |
+| **Miniature Worlds** (`diorama-studio/`) | Supplier: fast and premium, 12% discount floor | http://localhost:62261 | https://isgudtek.github.io/open-agentic-diorama-market/diorama-studio/ |
+| **Frostbite Miniatures** (`frostbite-studio/`) | Supplier: dense natural detail, cheaper, slower, 8% discount floor | http://localhost:62262 | https://isgudtek.github.io/open-agentic-diorama-market/frostbite-studio/ |
+
+Frostbite runs the same studio code as Miniature Worlds. `frostbite-studio/` only holds what makes it a different business: `shop.json` (name, prices, lead times, discount floor, design style), its own `agent-manifest.json` and agent network, and a colour theme.
 
 ## Run locally
 
 ```bash
-npm start          # node dev-server.js: both sites, CORS on, no install needed (Node 18+)
-npm run verify     # HTTP conformance checks across both ports
+npm start          # node dev-server.js: all three sites, CORS on, no install needed (Node 18+)
+npm run verify     # HTTP conformance checks across the three ports
 ```
 
-Open http://localhost:62260, click the first example and press **Run commission**. The studio opens in split view. You approve four times:
+Open http://localhost:62260, click the first example and press **Run commission**:
 
-1. On the hub, allow contact with the studio.
-2. On the studio, log the RFQ.
-3. On the hub, place the order.
-4. On the studio, lock the build slot.
+1. On the hub, allow contact with each studio (two prompts locally, none on GitHub Pages where all sites share one origin).
+2. Both studios open in the split view and each renders its own 3D blueprint. The hub shows the two quotes side by side: Miniature Worlds **$500, 7 days** (over budget) and Frostbite **$450, 12 days** (within budget).
+3. Click **Choose this quote**, or **Let the agent pick** (within budget first, then lowest price, then fastest).
+4. If the chosen quote is over budget, the hub negotiates: for Miniature Worlds $500 → you $430 → $465 → you $450, accepted.
+5. Approve the order on the hub, then the build-slot lock in the chosen studio's pane.
 
-The demo brief quotes $500. The hub counters $430, the studio comes back with $465, and the hub's $450 is accepted.
+Comparison quotes write nothing: only the studio you choose puts the order on its board.
 
 ## How it works
 
@@ -35,10 +41,11 @@ sequenceDiagram
   A->>U: Contact localhost:62261? (consent)
   A->>B: GET /agent-manifest.json + network JSON (CORS)
   A->>A: discovery_agent picks a supplier with diorama.quote
-  A->>B: OAW_RPC_REQUEST callTool request_quote {rfq}
+  Note over A,B: the same request goes to every shortlisted studio (here also Frostbite :62262)
+  A->>B: OAW_RPC_REQUEST callTool request_quote {rfq, log_rfq: false}
   B->>B: diorama_designer → scene graph · estimator → $500 · operator renders Three.js
-  B->>U: Approve Action? log_rfq
   B-->>A: OAW_RPC_EVENT stream + OAW_RPC_RESPONSE quote
+  A->>U: Compare quotes + live 3D blueprints · Choose this quote
   loop up to 3 rounds
     A->>A: negotiator_agent (never above budget)
     A->>B: negotiate_quote {counter}
@@ -76,7 +83,7 @@ npm run verify:pages   # checks the live sites
 npm run build -- --base https://your.host/path/ --out dist   # any other static host
 ```
 
-The build copies `shared/` into each site, rewrites the localhost URLs in the manifests for the target base, adds `.well-known/agent-manifest.json`, and adds `.nojekyll`. On GitHub Pages both sites share the `isgudtek.github.io` origin. The postMessage protocol is the same, but for a true cross-origin demo run them locally on two ports or host them on two domains.
+The build copies `shared/` into each site, layers `frostbite-studio/` over the studio code, rewrites the localhost URLs in the manifests for the target base, adds `.well-known/agent-manifest.json`, and adds `.nojekyll`. On GitHub Pages all three sites share the `isgudtek.github.io` origin. The postMessage protocol is the same, but for a true cross-origin demo run them locally on two ports or host them on two domains.
 
 ## Files
 
@@ -85,7 +92,8 @@ dev-server.js                 zero-dependency static server for both ports (CORS
 shared/oaw-core.js            providers, agent runtime, approvals, manifest validator, postMessage RPC
 shared/oaw-ui.{js,css}        settings modal + status pill, execution stream, approval/consent modals, Manifest Inspector
 buyer-hub/                    agent-manifest.json, procurement_hub.network.json, hub-logic.js, app.js, index.html, hub.css
-diorama-studio/               agent-manifest.json, diorama_studio.network.json, studio-logic.js, scene.js (Three.js r187), app.js
+diorama-studio/               agent-manifest.json, diorama_studio.network.json, shop.json, studio-logic.js, scene.js (Three.js r187), app.js
+frostbite-studio/             overlay on diorama-studio/: shop.json, agent-manifest.json, frostbite_studio.network.json, shop-theme.css
 scripts/build-sites.mjs       static build for any base URL
 scripts/verify.mjs            HTTP conformance checks
 docs/                         built GitHub Pages output
@@ -93,9 +101,9 @@ docs/                         built GitHub Pages output
 
 ## Devpost submission note
 
-> **Open Agentic Dioramas** is two independent agentic websites that do business with each other in the browser. A buyer types a commission into the **Procurement Hub**. Its `intake_agent` writes an RFQ. Its `discovery_agent` reads suppliers' public `agent-manifest.json` files and picks one that publishes `diorama.quote`. Its `negotiator_agent` then sends the RFQ to the **Miniature Worlds** studio over a postMessage RPC protocol. The studio's agents design a procedural 3D diorama, rendered live in Three.js, and price it from materials and labour hours. The two sides then negotiate: the studio never goes below its 12% floor, and the buyer never goes above budget. Each site owns its own writes, and every write stops on an **Approve Action?** card showing the exact payload, price and target origin.
+> **Open Agentic Diorama Market** is three independent agentic websites that do business with each other in the browser. A buyer types a commission into the **Procurement Hub**. Its `intake_agent` writes an RFQ, and its `discovery_agent` reads suppliers' public `agent-manifest.json` files and shortlists every studio that publishes `diorama.quote`. The `negotiator_agent` sends the RFQ to **Miniature Worlds** and **Frostbite Miniatures** over a postMessage RPC protocol. Each studio's agents design their own procedural 3D diorama, rendered live in Three.js side by side, and price it from materials and labour hours. The buyer compares the two quotes and 3D blueprints, chooses one, and the hub negotiates with that studio: the studio never goes below its floor, and the buyer never goes above budget. Each site owns its own writes, and every write stops on an **Approve Action?** card showing the exact payload, price and target origin.
 >
-> **Mozilla Otari** is a first-class provider. Visitors bring their own Otari key (global or EU region), load the models their organization can run, and every agent call goes through Otari's OpenAI-compatible `chat/completions` with JSON mode. Usage tokens are shown per call. **Hybrid Auto** runs **Gemini Nano** on the device first and falls back to Otari only when Nano can't answer. **Demo Mode** lets judges try everything without a key. The sites have no backend and no build step, and the agent prompts and schemas are published as JSON.
+> **Mozilla Otari** is a first-class provider. Visitors bring their own Otari key (global or EU region), load the models their organization can run, and every agent call goes through Otari's OpenAI-compatible `chat/completions` with JSON mode. Usage tokens are shown per call. **Gemini Nano** runs on the device when no key is set, **Hybrid** runs Nano first with Otari as fallback, and **Demo Mode** lets judges try everything without a key. The sites have no backend and no build step, and the agent prompts and schemas are published as JSON.
 
 ## License
 

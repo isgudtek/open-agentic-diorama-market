@@ -1,0 +1,11 @@
+{
+  "id": "frostbite",
+  "id_prefix": "FB",
+  "name": "Frostbite Miniatures",
+  "tagline": "Scale Diorama Workshop · dense natural detail · open agentic storefront",
+  "settings_key": "fb.oaw.settings.v1",
+  "board_key": "market.fb.board.v1",
+  "pricing": { "labor_rate": 9.5, "material_mult": 0.85, "overhead": 0.04, "lead_mult": 1.7, "max_discount": 0.08 },
+  "style": { "density": 1.6, "layout": "wild" },
+  "theme": { "plinth": "#26313d", "plate": "#c3ccd6" }
+}

@@ -3,9 +3,10 @@
  * Zero-dependency dev server for the two interconnected agentic sites.
  *   http://localhost:62260 -> buyer-hub/       (OpenAgentic Procurement & Commission Hub)
  *   http://localhost:62261 -> diorama-studio/  (Miniature Worlds 3D Diorama Studio)
+ *   http://localhost:62262 -> frostbite-studio/ over diorama-studio/ (Frostbite Miniatures: same code, own profile)
  * Both serve /shared/* from shared/, alias /.well-known/agent-manifest.json to /agent-manifest.json,
  * and send Access-Control-Allow-Origin: * so the sites can fetch each other's public artifacts.
- * Env: HUB_PORT, STUDIO_PORT, HOST (default 127.0.0.1).
+ * Env: HUB_PORT, STUDIO_PORT, FROSTBITE_PORT, HOST (default 127.0.0.1).
  */
 import http from "node:http";
 import { createReadStream, statSync } from "node:fs";
@@ -17,6 +18,7 @@ const HOST = process.env.HOST || "127.0.0.1";
 const SITES = [
   { name: "Buyer Hub", dir: "buyer-hub", port: Number(process.env.HUB_PORT || 62260) },
   { name: "3D Diorama Studio", dir: "diorama-studio", port: Number(process.env.STUDIO_PORT || 62261) },
+  { name: "Frostbite Miniatures", dir: "frostbite-studio", base: "diorama-studio", port: Number(process.env.FROSTBITE_PORT || 62262) },
 ];
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
@@ -38,11 +40,17 @@ function resolveFile(site, urlPath) {
   try { p = decodeURIComponent(urlPath.split("?")[0]); } catch { return null; }
   if (p === "/.well-known/agent-manifest.json") p = "/agent-manifest.json";
   if (p.endsWith("/")) p += "index.html";
-  const [base, rel] = p.startsWith("/shared/") ? [join(ROOT, "shared"), p.slice("/shared/".length)] : [join(ROOT, site.dir), p.slice(1)];
+  const shared = p.startsWith("/shared/");
+  const rel = shared ? p.slice("/shared/".length) : p.slice(1);
   if (rel.split("/").some((seg) => seg.startsWith(".") || seg === "")) return null;
-  const file = normalize(join(base, rel));
-  if (!file.startsWith(base + sep)) return null;
-  try { return statSync(file).isFile() ? file : null; } catch { return null; }
+  // An overlay site (site.base) serves its own files first, then the base site's.
+  const roots = shared ? [join(ROOT, "shared")] : [join(ROOT, site.dir), ...(site.base ? [join(ROOT, site.base)] : [])];
+  for (const base of roots) {
+    const file = normalize(join(base, rel));
+    if (!file.startsWith(base + sep)) return null;
+    try { if (statSync(file).isFile()) return file; } catch { /* try the next root */ }
+  }
+  return null;
 }
 
 function handler(site) {
@@ -68,7 +76,7 @@ function handler(site) {
 for (const site of SITES) {
   const server = http.createServer(handler(site));
   server.on("error", (e) => {
-    console.error(e.code === "EADDRINUSE" ? `Port ${site.port} is already in use (${site.name}). Stop that process or set ${site.dir === "buyer-hub" ? "HUB_PORT" : "STUDIO_PORT"}.` : e.message);
+    console.error(e.code === "EADDRINUSE" ? `Port ${site.port} is already in use (${site.name}). Stop that process or set ${{ "buyer-hub": "HUB_PORT", "diorama-studio": "STUDIO_PORT", "frostbite-studio": "FROSTBITE_PORT" }[site.dir]}.` : e.message);
     process.exit(1);
   });
   server.listen(site.port, HOST, () => console.log(`${site.name.padEnd(18)} http://localhost:${site.port}/   (${site.dir}/)`));

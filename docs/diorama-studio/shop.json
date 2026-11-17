@@ -1,0 +1,11 @@
+{
+  "id": "miniature-worlds",
+  "id_prefix": "MW",
+  "name": "Miniature Worlds",
+  "tagline": "3D Custom Diorama Studio · open agentic storefront",
+  "settings_key": "mw.oaw.settings.v1",
+  "board_key": "market.mw.board.v1",
+  "pricing": { "labor_rate": 14, "material_mult": 1, "overhead": 0.08, "lead_mult": 1, "max_discount": 0.12 },
+  "style": { "density": 1, "layout": "classic" },
+  "theme": { "plinth": "#3b2416", "plate": "#c9a24a" }
+}

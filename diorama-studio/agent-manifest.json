@@ -39,7 +39,7 @@
       "requires_approval": false,
       "rpc_callable": true,
       "description": "Design + price a diorama for an RFQ and render the 3D preview. Logging the RFQ on the board is a separate approved write.",
-      "input_schema": { "type": "object", "required": ["rfq"], "properties": { "rfq": { "type": "object" }, "caller_agent": { "type": "string" } } }
+      "input_schema": { "type": "object", "required": ["rfq"], "properties": { "rfq": { "type": "object" }, "caller_agent": { "type": "string" }, "log_rfq": { "type": "boolean", "description": "false for comparison quotes; default true" } } }
     },
     {
       "name": "negotiate_quote",

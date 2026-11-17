@@ -1,9 +1,9 @@
 {
   "name": "OpenAgentic Procurement & Commission Hub",
-  "version": "1.0.0",
-  "description": "A buyer-side agentic website. Type a commission in plain language: agents extract an RFQ, discover suppliers from their public agent manifests, request a quote with a 3D blueprint over window.postMessage, negotiate within your budget, and ask you to approve the order.",
+  "version": "2.0.0",
+  "description": "A buyer-side agentic website. Type a commission in plain language: agents extract an RFQ, discover suppliers from their public agent manifests, collect competing quotes with live 3D blueprints over window.postMessage, let you choose one, negotiate within your budget, and ask you to approve the order.",
   "profile": "worldwide-agentic-web-mvp-0.2",
-  "endpoint": "https://isgudtek.github.io/open-agentic-dioramas/buyer-hub/",
+  "endpoint": "https://isgudtek.github.io/open-agentic-diorama-market/buyer-hub/",
   "networks": [
     {
       "name": "procurement_hub",
@@ -16,12 +16,14 @@
   "capabilities": [
     "procurement.rfq",
     "procurement.discovery",
+    "procurement.comparison",
     "procurement.negotiation",
     "procurement.order"
   ],
   "peers": {
     "suppliers": [
-      "https://isgudtek.github.io/open-agentic-dioramas/diorama-studio"
+      "https://isgudtek.github.io/open-agentic-diorama-market/diorama-studio",
+      "https://isgudtek.github.io/open-agentic-diorama-market/frostbite-studio"
     ],
     "discovery": "GET <supplier>/agent-manifest.json, falling back to <supplier>/.well-known/agent-manifest.json",
     "required_capability": "diorama.quote"
@@ -33,11 +35,11 @@
     },
     {
       "name": "discovery_agent",
-      "role": "Fetches supplier manifests, checks capabilities, picks a supplier"
+      "role": "Fetches supplier manifests, checks capabilities, shortlists every supplier that can quote"
     },
     {
       "name": "negotiator_agent",
-      "role": "Requests the quote + 3D blueprint, counter-offers within budget, triggers human approval"
+      "role": "Collects competing quotes + 3D blueprints, waits for your choice, counter-offers within budget, triggers human approval"
     }
   ],
   "tools": [

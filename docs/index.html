@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Open Agentic Dioramas: two interconnected agentic sites</title>
+  <title>Open Agentic Diorama Market: a buyer hub and two competing studios</title>
   <style>
     body { margin: 0; font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; background: #12152a; color: #eef0ff; display: grid; place-items: center; min-height: 100vh; }
     main { max-width: 760px; padding: 32px; }
@@ -13,19 +13,21 @@
     a.card { display: block; padding: 18px; border-radius: 14px; text-decoration: none; color: inherit; border: 1px solid #343a66; background: #1b2042; }
     a.card:hover { border-color: #7f8cff; }
     a.card.studio { background: #3b2416; border-color: #6b4430; }
+    a.card.frost { background: #1d2833; border-color: #3e5466; }
     strong { display: block; font-size: 18px; margin-bottom: 4px; }
     code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 5px; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Open Agentic Dioramas</h1>
-    <p>Two agentic websites that find each other through their published <code>agent-manifest.json</code> and negotiate in your browser over <code>window.postMessage</code>. Bring your own model with Mozilla Otari, run Gemini Nano on-device, or use Demo Mode with no key.</p>
+    <h1>Open Agentic Diorama Market</h1>
+    <p>Three agentic websites that find each other through their published <code>agent-manifest.json</code> and negotiate in your browser over <code>window.postMessage</code>. Bring your own model with Mozilla Otari, run Gemini Nano on-device, or use Demo Mode with no key.</p>
     <div class="cards">
       <a class="card" href="buyer-hub/"><strong>OpenAgentic Procurement Hub</strong>Type a commission; agents write the RFQ, discover the studio, negotiate within your budget and ask you to approve the order.</a>
-      <a class="card studio" href="diorama-studio/"><strong>Miniature Worlds Studio</strong>Artisan storefront with a live Three.js 3D diorama designer, quotes, a 12% negotiation floor and a commission board.</a>
+      <a class="card studio" href="diorama-studio/"><strong>Miniature Worlds</strong>Artisan studio: fast and premium. Live Three.js designer, quotes, a 12% negotiation floor and a commission board.</a>
+      <a class="card frost" href="frostbite-studio/"><strong>Frostbite Miniatures</strong>Workshop for dense natural detail: cheaper, slower, an 8% floor. Same open runtime, its own agents and prices.</a>
     </div>
-    <p>Start with the Hub and click <em>Run commission</em>; the studio opens beside it.</p>
+    <p>Start with the Hub and click <em>Run commission</em>: both studios design their own 3D diorama side by side, you compare the quotes, choose one, and the hub negotiates and asks you to approve the order.</p>
   </main>
 </body>
 </html>

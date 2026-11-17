@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="oaw-build" content="fa9d47957d">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Miniature Worlds — 3D Custom Diorama Studio</title>
+  <meta name="description" content="An open agentic artisan storefront: agents design a procedural 3D diorama, quote it and negotiate with buyer agents from other sites.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'">
+  <link rel="alternate" type="application/json" href="agent-manifest.json" title="Agent manifest">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b2416'/%3E%3Cpath d='M5 22l7-9 5 6 3-4 7 7z' fill='%23e8b45a'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="shared/oaw-ui.css?v=fa9d47957d">
+  <link rel="stylesheet" href="studio.css?v=fa9d47957d">
+  <link rel="stylesheet" href="shop-theme.css?v=fa9d47957d">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div>
+        <h1 id="shopName">Miniature Worlds</h1>
+        <p id="shopTag" class="sub">3D Custom Diorama Studio · open agentic storefront</p>
+      </div>
+    </div>
+    <div class="actions">
+      <span id="pill" class="oaw-pill" role="status" aria-live="polite">Loading…</span>
+      <button id="manifestBtn" class="oaw-btn" type="button">Manifest Inspector</button>
+      <button id="settingsBtn" class="oaw-btn" type="button">Model settings</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main class="main">
+      <section class="viewer empty" id="viewer" aria-label="Live 3D diorama preview">
+        <div id="viewport" class="viewport"></div>
+        <div id="vpEmpty" class="vp-empty" role="status">
+          <span class="vp-empty-mark" aria-hidden="true"></span>
+          <p>The model you requested will appear here</p>
+        </div>
+        <div class="vp-overlay top">
+          <p id="vpTitle" class="vp-title"></p>
+          <p id="vpMeta" class="vp-meta"></p>
+        </div>
+        <div class="vp-overlay bottom">
+          <button id="rotateBtn" class="oaw-btn small dark" type="button" aria-pressed="true">Auto-rotate</button>
+          <button id="resetBtn" class="oaw-btn small dark" type="button">Reset view</button>
+          <span id="vpStats" class="vp-stats"></span>
+          <span class="vp-hint">Drag to orbit · scroll to zoom</span>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Design a diorama">
+        <form id="composer" class="composer" autocomplete="off">
+          <label for="prompt">Describe your diorama</label>
+          <div class="oaw-row">
+            <input id="prompt" type="text" maxlength="400" placeholder="e.g. 1:35 WWII desert trench, 40x40cm, resin river, LED explosions" required>
+            <button id="designBtn" class="oaw-btn primary" type="submit">Design &amp; quote</button>
+          </div>
+          <div id="examples" class="chips" aria-label="Examples"></div>
+        </form>
+        <div id="quote" class="quote" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-label="Commission board">
+        <h2 class="ph">Commission board</h2>
+        <div class="board">
+          <div class="col" data-col="Incoming RFQ"><h3>Incoming RFQ <span class="count">0</span></h3><ul class="cards"></ul></div>
+          <div class="col" data-col="3D Blueprint Approved"><h3>3D Blueprint Approved <span class="count">0</span></h3><ul class="cards"></ul></div>
+          <div class="col" data-col="In Fabrication"><h3>In Fabrication <span class="count">0</span></h3><ul class="cards"></ul></div>
+        </div>
+        <p class="oaw-muted small">Every board change pauses for your approval, including changes requested by buyer agents on other sites.</p>
+      </section>
+    </main>
+
+    <aside id="stream" class="oaw-stream stream" aria-label="Agent Network Execution Stream"></aside>
+  </div>
+
+  <script type="module" src="app.js?v=fa9d47957d"></script>
+</body>
+</html>

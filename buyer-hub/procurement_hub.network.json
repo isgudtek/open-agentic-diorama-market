@@ -31,21 +31,21 @@
     {
       "name": "discovery_agent",
       "function": {
-        "description": "Fetches /agent-manifest.json from registered supplier sites, checks their published capabilities and picks the best fit for the RFQ.",
+        "description": "Fetches /agent-manifest.json from registered supplier sites, checks their published capabilities and shortlists every supplier that can quote the RFQ.",
         "parameters": { "type": "object", "required": ["rfq", "suppliers"], "properties": { "rfq": { "type": "object" }, "suppliers": { "type": "array" } } }
       },
-      "instructions": "Choose the best supplier for the RFQ from the given list. Only choose a supplier from the list. Prefer one that supports the RFQ's scale and terrain. Reply with {\"supplier_url\": <url from the list>, \"reason\": <one sentence>} and nothing else.",
+      "instructions": "Shortlist the suppliers that should quote this RFQ, so the buyer can compare offers. Only use URLs from the given list. Include every supplier that builds the RFQ's scale (at most 4); leave out suppliers that do not. Reply with {\"shortlist\": [<urls from the list>], \"reason\": <one sentence>} and nothing else.",
       "output_schema": {
         "type": "object",
-        "required": ["supplier_url", "reason"],
-        "properties": { "supplier_url": { "type": "string" }, "reason": { "type": "string", "maxLength": 300 } }
+        "required": ["shortlist", "reason"],
+        "properties": { "shortlist": { "type": "array", "maxItems": 4, "items": { "type": "string" } }, "reason": { "type": "string", "maxLength": 300 } }
       },
       "tools": ["discover_suppliers", "negotiator_agent"]
     },
     {
       "name": "negotiator_agent",
       "function": {
-        "description": "Sends the RFQ to the chosen supplier's agent network, evaluates the quote and 3D blueprint, negotiates if it is over budget, and asks the human to approve the order.",
+        "description": "Collects quotes and 3D blueprints from the shortlisted suppliers, lets the human choose one, negotiates with the chosen supplier if it is over budget, and asks the human to approve the order.",
         "parameters": { "type": "object", "required": ["rfq", "quote", "round"], "properties": { "rfq": { "type": "object" }, "quote": { "type": "object" }, "round": { "type": "integer" }, "history": { "type": "array" } } }
       },
       "instructions": "You negotiate for the buyer. You get the RFQ (with max_budget), the supplier's current quote and the round number (max 3). If the quote price is at or below max_budget, accept. If it is above, make a counter-offer: start somewhat below the budget in round 1 and move to at most max_budget later. Never offer more than max_budget. If the supplier says the offer is final and it is still above budget, walk away. Keep the message to one short, polite sentence. Reply with {\"action\": \"accept\" | \"counter\" | \"walk_away\", \"counter_price\": <number or null>, \"message\": <string>} and nothing else.",
@@ -58,7 +58,7 @@
           "message": { "type": "string", "maxLength": 300 }
         }
       },
-      "tools": ["request_supplier_quote", "send_counter_offer", "place_order", "http://localhost:62261/diorama_studio"]
+      "tools": ["request_supplier_quote", "send_counter_offer", "place_order", "http://localhost:62261/diorama_studio", "http://localhost:62262/frostbite_studio"]
     }
   ]
 }

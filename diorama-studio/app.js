@@ -9,7 +9,12 @@ const embedded = window.parent !== window || new URLSearchParams(location.search
 document.body.classList.toggle("embedded", embedded);
 
 const BUILD = document.querySelector('meta[name="oaw-build"]')?.content || "dev";
+const shop = await (await fetch("./shop.json", { cache: "no-store" })).json();
+L.configureShop(shop);
 const manifest = await (await fetch("./agent-manifest.json", { cache: "no-store" })).json();
+document.title = `${shop.name} — ${shop.tagline}`;
+$("#shopName").textContent = shop.name;
+$("#shopTag").textContent = shop.tagline;
 const network = await (await fetch(`./${manifest.networks[0].hocon}`, { cache: "no-store" })).json();
 const host = (origin) => { try { return new URL(origin).host; } catch { return origin; } };
 
@@ -22,27 +27,30 @@ class BoardStore {
   save(cards) { localStorage.setItem(this.key, JSON.stringify(cards)); }
 }
 const COLUMNS = ["Incoming RFQ", "3D Blueprint Approved", "In Fabrication"];
-const store = new BoardStore("studio.board.v1");
+const store = new BoardStore(shop.board_key);
 let cards = store.load();
 const quotes = new Map(); // quote_id -> internal quote (includes the floor, never sent to buyers)
 
 /* ------------------------------------------------------------- viewport */
 
 let viewer = null;
+let pendingScene = null; // a scene that arrived before Three.js finished loading
 const vp = $("#viewport");
-try {
-  const { createViewer } = await import("./scene.js");
-  viewer = createViewer(vp);
-} catch (e) {
+// Load the 3D viewer in the background: the studio answers buyers right away, and draws once Three.js is here.
+import("./scene.js").then(({ createViewer }) => {
+  viewer = createViewer(vp, { theme: { plinth: parseInt(String(shop.theme?.plinth || "#3b2416").slice(1), 16), plate: parseInt(String(shop.theme?.plate || "#c9a24a").slice(1), 16) } });
+  if (pendingScene) { const [sc, label] = pendingScene; pendingScene = null; showScene(sc, label); }
+}).catch((e) => {
   $("#vpEmpty").hidden = true;
   vp.append(h("div", { class: "vp-error" }, h("strong", { text: "3D preview unavailable" }), h("span", { text: ` Three.js loads from cdn.jsdelivr.net (${e.message}). Agents, quotes and the board still work.` })));
-}
+});
 function showScene(scene, label) {
+  if (!viewer) pendingScene = [scene, label];
   const stats = viewer ? viewer.render(scene) : null;
   $("#viewer").classList.remove("empty");
   $("#vpTitle").textContent = scene.title;
   $("#vpMeta").textContent = `${label ? `${label} · ` : ""}${scene.terrain_type} · ${scene.base_width}×${scene.base_depth} cm · ${scene.structures.length} structures${scene.water_feature ? " · resin water" : ""}${scene.led_points.length ? ` · ${scene.led_points.length} LEDs` : ""}`;
-  $("#vpStats").textContent = stats ? `${stats.triangles.toLocaleString()} triangles` : "";
+  $("#vpStats").textContent = stats ? `${stats.triangles.toLocaleString()} triangles` : "loading 3D…";
   return stats;
 }
 $("#rotateBtn").addEventListener("click", (e) => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", String(on)); viewer?.setAutoRotate(on); });
@@ -139,7 +147,7 @@ async function designAndQuote({ rfq, brief }, ctx = {}) {
   }
   const msg = await runtime.runAgent("diorama_estimator", { mode: "quote", quote: { price: est.price, breakdown: est.breakdown, lead_time_days: est.lead_time_days, scale: est.scale } }, { from: "diorama_designer" });
   const q = {
-    quote_id: uid("MWQ"), rfq: parsed, scene, scale: est.scale, base_price: est.price, price: est.price, floor: L.floorPrice(est.price),
+    quote_id: uid(`${shop.id_prefix}Q`), rfq: parsed, scene, scale: est.scale, base_price: est.price, price: est.price, floor: L.floorPrice(est.price),
     breakdown: est.breakdown, lead_time_days: est.lead_time_days, rounds: 0, status: "open", buyer: ctx.origin || location.origin,
     message: msg.message || L.estimatorDeterministic({ mode: "quote", quote: est }).message, history: [{ by: "studio", price: est.price, note: "list price" }], created: Date.now(),
   };
@@ -152,8 +160,9 @@ async function designAndQuote({ rfq, brief }, ctx = {}) {
 const tools = {
   request_quote: {
     effect: "preview", rpc: true, title: "Design and quote a diorama",
-    input_schema: { type: "object", required: ["rfq"], properties: { rfq: { type: "object" }, caller_agent: { type: "string" } } },
-    handler: (args, ctx) => designAndQuote({ rfq: args.rfq }, { ...ctx, callerAgent: args.caller_agent, logRfq: true }),
+    input_schema: { type: "object", required: ["rfq"], properties: { rfq: { type: "object" }, caller_agent: { type: "string" }, log_rfq: { type: "boolean" } } },
+    // log_rfq: false = comparison quote (a buyer shopping around); nothing is written to the board until confirmed.
+    handler: (args, ctx) => designAndQuote({ rfq: args.rfq }, { ...ctx, callerAgent: args.caller_agent, logRfq: args.log_rfq !== false }),
   },
   negotiate_quote: {
     effect: "preview", rpc: true, title: "Counter-offer",
@@ -183,7 +192,7 @@ const tools = {
     handler({ scene }) {
       const s = L.normalizeScene(scene, {});
       const stats = showScene(s);
-      return stats ? { rendered: true, ...stats } : { rendered: false, reason: "3D viewport not available in this browser." };
+      return stats ? { rendered: true, ...stats } : { rendered: false, queued: !!pendingScene, reason: pendingScene ? "3D viewer still loading; the scene will draw when it is ready." : "3D viewport not available in this browser." };
     },
   },
   get_board: {
@@ -222,7 +231,7 @@ const tools = {
       const q = needQuote(quote_id);
       let card = cards.find((c) => c.quote_id === quote_id);
       if (!card) { card = { id: uid("card"), quote_id, title: q.scene.title, scale: q.scale, dims: `${q.scene.base_width}×${q.scene.base_depth} cm`, buyer: q.buyer, created: new Date().toISOString() }; cards.push(card); }
-      Object.assign(card, { status: "3D Blueprint Approved", price, order_id: uid("MW").toUpperCase(), slot_date: addDays(q.lead_time_days), buyer_ref: buyer_ref || null });
+      Object.assign(card, { status: "3D Blueprint Approved", price, order_id: uid(shop.id_prefix).toUpperCase(), slot_date: addDays(q.lead_time_days), buyer_ref: buyer_ref || null });
       q.status = "confirmed";
       store.save(cards); drawBoard(); drawQuote(q);
       return { order_id: card.order_id, slot_date: card.slot_date, status: card.status, price, supplier: manifest.name };
@@ -237,7 +246,7 @@ const tools = {
   },
 };
 
-runtime = new AgentRuntime({ site: "studio", manifest, network, agentImpl, tools, settingsKey: "studio.oaw.settings.v1", approve });
+runtime = new AgentRuntime({ site: "studio", manifest, network, agentImpl, tools, settingsKey: shop.settings_key, approve });
 runtime.on((e) => stream.add(e));
 
 /* ---------------------------------------------------- settings + inspector */
@@ -281,7 +290,7 @@ serveRpc({
   trustedOrigins: trusted,
   consent: (r) => consent({ ...r, direction: "inbound" }),
   methods: {
-    ping: () => ({ site: "diorama-studio", name: manifest.name, ready: true, provider: runtime.describeProvider().label }),
+    ping: () => ({ site: shop.id, name: manifest.name, ready: true, provider: runtime.describeProvider().label }),
     manifest: () => manifest,
     getState: () => getState(),
     run: ({ prompt }, ctx) => designAndQuote({ brief: String(prompt || "") }, { ...ctx, logRfq: false }),

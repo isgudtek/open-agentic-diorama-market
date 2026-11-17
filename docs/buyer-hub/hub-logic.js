@@ -65,10 +65,37 @@ export function normalizeRfq(out, input) {
   };
 }
 
-/** Demo discovery: the first supplier that supports the RFQ's scale. */
+const shopName = (s) => String(s.name || s.url).split(" — ")[0];
+
+/** Demo discovery: shortlist every supplier that builds the RFQ's scale (all of them if none match), max 4. */
 export function discoveryDeterministic({ rfq, suppliers }) {
-  const fit = suppliers.find((s) => !rfq.scale || (s.scales || []).includes(rfq.scale)) || suppliers[0];
-  return { supplier_url: fit?.url || "", reason: fit ? `${fit.name} publishes diorama.quote${rfq.scale && (fit.scales || []).includes(rfq.scale) ? ` and builds ${rfq.scale}` : ""}.` : "No supplier available." };
+  const fit = suppliers.filter((s) => !rfq.scale || (s.scales || []).includes(rfq.scale));
+  const list = (fit.length ? fit : suppliers).slice(0, 4);
+  return { shortlist: list.map((s) => s.url), reason: list.length ? `${list.map(shopName).join(" and ")} publish diorama.quote${rfq.scale && fit.length ? ` and build ${rfq.scale}` : ""}; asking ${list.length > 1 ? "each" : "it"} for a quote.` : "No supplier available." };
+}
+
+/** Keep only shortlisted URLs that are real suppliers; fall back to the deterministic shortlist. */
+export function normalizeShortlist(out, input) {
+  const known = new Set(input.suppliers.map((s) => s.url));
+  const list = [...new Set((Array.isArray(out?.shortlist) ? out.shortlist : [out?.supplier_url]).filter((u) => known.has(u)))].slice(0, 4);
+  if (!list.length) return { ...discoveryDeterministic(input), reason: "Model shortlisted no known supplier; asking every matching one." };
+  return { shortlist: list, reason: String(out?.reason || "").slice(0, 300) };
+}
+
+/**
+ * Rank comparison quotes for the "Let the agent pick" option and the badges:
+ * quotes within budget first, then the lowest price, then the shortest lead time.
+ */
+export function rankQuotes(quotes, budget) {
+  const inBudget = (q) => (budget == null || q.price <= budget ? 0 : 1);
+  return [...quotes].sort((a, b) => inBudget(a) - inBudget(b) || a.price - b.price || a.lead_time_days - b.lead_time_days);
+}
+export function quoteBadges(q, quotes, budget) {
+  const tags = [];
+  if (quotes.length > 1 && q.price === Math.min(...quotes.map((x) => x.price))) tags.push("Lowest price");
+  if (quotes.length > 1 && q.lead_time_days === Math.min(...quotes.map((x) => x.lead_time_days))) tags.push("Fastest");
+  if (budget != null) tags.push(q.price <= budget ? "Within budget" : `Over budget by $${Math.round(q.price - budget)}`);
+  return tags;
 }
 
 /** Demo negotiator: open about 14% under the quote (never above budget), then move to the budget. */

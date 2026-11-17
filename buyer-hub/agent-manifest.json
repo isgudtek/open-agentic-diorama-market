@@ -1,7 +1,7 @@
 {
   "name": "OpenAgentic Procurement & Commission Hub",
-  "version": "1.0.0",
-  "description": "A buyer-side agentic website. Type a commission in plain language: agents extract an RFQ, discover suppliers from their public agent manifests, request a quote with a 3D blueprint over window.postMessage, negotiate within your budget, and ask you to approve the order.",
+  "version": "2.0.0",
+  "description": "A buyer-side agentic website. Type a commission in plain language: agents extract an RFQ, discover suppliers from their public agent manifests, collect competing quotes with live 3D blueprints over window.postMessage, let you choose one, negotiate within your budget, and ask you to approve the order.",
   "profile": "worldwide-agentic-web-mvp-0.2",
   "endpoint": "http://localhost:62260/",
   "networks": [
@@ -13,42 +13,116 @@
     }
   ],
   "default_network": "procurement_hub",
-  "capabilities": ["procurement.rfq", "procurement.discovery", "procurement.negotiation", "procurement.order"],
+  "capabilities": [
+    "procurement.rfq",
+    "procurement.discovery",
+    "procurement.comparison",
+    "procurement.negotiation",
+    "procurement.order"
+  ],
   "peers": {
-    "suppliers": ["http://localhost:62261"],
+    "suppliers": [
+      "http://localhost:62261",
+      "http://localhost:62262"
+    ],
     "discovery": "GET <supplier>/agent-manifest.json, falling back to <supplier>/.well-known/agent-manifest.json",
     "required_capability": "diorama.quote"
   },
   "agents": [
-    { "name": "intake_agent", "role": "Natural-language commission -> structured RFQ (scale, theme, dimensions_cm, features, max_budget)" },
-    { "name": "discovery_agent", "role": "Fetches supplier manifests, checks capabilities, picks a supplier" },
-    { "name": "negotiator_agent", "role": "Requests the quote + 3D blueprint, counter-offers within budget, triggers human approval" }
+    {
+      "name": "intake_agent",
+      "role": "Natural-language commission -> structured RFQ (scale, theme, dimensions_cm, features, max_budget)"
+    },
+    {
+      "name": "discovery_agent",
+      "role": "Fetches supplier manifests, checks capabilities, shortlists every supplier that can quote"
+    },
+    {
+      "name": "negotiator_agent",
+      "role": "Collects competing quotes + 3D blueprints, waits for your choice, counter-offers within budget, triggers human approval"
+    }
   ],
   "tools": [
-    { "name": "discover_suppliers", "effect": "read", "requires_approval": false, "rpc_callable": false, "description": "Fetch and validate the agent manifests of registered suppliers (asks before contacting a new origin)." },
-    { "name": "request_supplier_quote", "effect": "read", "requires_approval": false, "rpc_callable": false, "description": "Send the RFQ to a supplier's request_quote tool over postMessage RPC. Non-binding." },
-    { "name": "send_counter_offer", "effect": "read", "requires_approval": false, "rpc_callable": false, "description": "Send a counter-offer to the supplier's negotiate_quote tool. Non-binding." },
-    { "name": "place_order", "effect": "write", "requires_approval": true, "rpc_callable": false, "description": "Confirm the commission with the supplier (confirm_commission) and record the order. Never above the budget." },
-    { "name": "list_orders", "effect": "read", "requires_approval": false, "rpc_callable": true, "description": "Read the orders placed from this hub." }
+    {
+      "name": "discover_suppliers",
+      "effect": "read",
+      "requires_approval": false,
+      "rpc_callable": false,
+      "description": "Fetch and validate the agent manifests of registered suppliers (asks before contacting a new origin)."
+    },
+    {
+      "name": "request_supplier_quote",
+      "effect": "read",
+      "requires_approval": false,
+      "rpc_callable": false,
+      "description": "Send the RFQ to a supplier's request_quote tool over postMessage RPC. Non-binding."
+    },
+    {
+      "name": "send_counter_offer",
+      "effect": "read",
+      "requires_approval": false,
+      "rpc_callable": false,
+      "description": "Send a counter-offer to the supplier's negotiate_quote tool. Non-binding."
+    },
+    {
+      "name": "place_order",
+      "effect": "write",
+      "requires_approval": true,
+      "rpc_callable": false,
+      "description": "Confirm the commission with the supplier (confirm_commission) and record the order. Never above the budget."
+    },
+    {
+      "name": "list_orders",
+      "effect": "read",
+      "requires_approval": false,
+      "rpc_callable": true,
+      "description": "Read the orders placed from this hub."
+    }
   ],
   "rpc": {
     "transport": "window.postMessage",
     "request": "OAW_RPC_REQUEST",
     "response": "OAW_RPC_RESPONSE",
     "event": "OAW_RPC_EVENT",
-    "methods": ["ping", "manifest", "getState", "run", "callTool"],
+    "methods": [
+      "ping",
+      "manifest",
+      "getState",
+      "run",
+      "callTool"
+    ],
     "trusted_origins": [],
     "consent": "Every other origin is asked for once. place_order always pauses for approval on this site."
   },
   "window_api": "window.OpenAgenticWeb",
   "llm": {
     "providers": [
-      { "id": "otari", "label": "Mozilla Otari Gateway (BYOK)", "base_url": "https://api.otari.ai/api/v1", "eu_base_url": "https://eu.api.otari.ai/api/v1", "model_format": "provider:model" },
-      { "id": "nano", "label": "Gemini Nano (Chrome Prompt API)", "fallback": "Gemini Nano (Local Sim), labeled simulated" },
-      { "id": "hybrid", "label": "Hybrid Auto: Nano local, Otari cloud fallback" },
-      { "id": "demo", "label": "Demo Mode (deterministic, no key)" }
+      {
+        "id": "otari",
+        "label": "Mozilla Otari Gateway (BYOK)",
+        "base_url": "https://api.otari.ai/api/v1",
+        "eu_base_url": "https://eu.api.otari.ai/api/v1",
+        "model_format": "provider:model"
+      },
+      {
+        "id": "nano",
+        "label": "Gemini Nano (Chrome Prompt API)",
+        "fallback": "Gemini Nano (Local Sim), labeled simulated"
+      },
+      {
+        "id": "hybrid",
+        "label": "Hybrid Auto: Nano local, Otari cloud fallback"
+      },
+      {
+        "id": "demo",
+        "label": "Demo Mode (deterministic, no key)"
+      }
     ],
     "note": "Visitors choose the provider. The Otari key stays on this origin; supplier sites run their own agents and never receive it."
   },
-  "peer_policy": { "mode": "open", "outbound": "consent per origin before the first contact", "inbound": "postMessage RPC with origin checks and consent" }
+  "peer_policy": {
+    "mode": "open",
+    "outbound": "consent per origin before the first contact",
+    "inbound": "postMessage RPC with origin checks and consent"
+  }
 }

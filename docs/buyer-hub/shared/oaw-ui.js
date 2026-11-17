@@ -1,7 +1,7 @@
 /**
  * oaw-ui.js: shared UI for both sites. All model/peer text is rendered with textContent, never as HTML.
  */
-import { OTARI_REGIONS, OTARI_MODELS, validateManifest, testOtari, listOtariModels, cleanApiKey } from "./oaw-core.js?v=3ccc351ccd";
+import { OTARI_REGIONS, OTARI_MODELS, validateManifest, testOtari, listOtariModels, cleanApiKey } from "./oaw-core.js?v=fa9d47957d";
 
 export function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);

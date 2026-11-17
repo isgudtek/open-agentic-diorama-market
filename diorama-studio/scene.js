@@ -20,7 +20,8 @@ function seeded(seedText) {
 }
 const noise2 = (x, z) => Math.sin(x * 0.21) * Math.cos(z * 0.17) + 0.5 * Math.sin(x * 0.47 + z * 0.31) + 0.25 * Math.cos(x * 0.9 - z * 0.7);
 
-export function createViewer(container, { onReady } = {}) {
+export function createViewer(container, { onReady, theme = {} } = {}) {
+  const PLINTH = theme.plinth ?? 0x3b2416, PLATE = theme.plate ?? 0xc9a24a;
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
@@ -83,10 +84,10 @@ export function createViewer(container, { onReady } = {}) {
     const snow = s.terrain_type === "snow";
 
     // Plinth: walnut frame with a brass plate.
-    const plinth = box(W + 4, 3.2, D + 4, mat(0x3b2416, { roughness: 0.55 }));
+    const plinth = box(W + 4, 3.2, D + 4, mat(PLINTH, { roughness: 0.55 }));
     plinth.position.y = -2.0 - 1.6;
     g.add(plinth);
-    const plate = box(Math.min(12, W * 0.4), 1.1, 0.2, mat(0xc9a24a, { metalness: 0.8, roughness: 0.3 }));
+    const plate = box(Math.min(12, W * 0.4), 1.1, 0.2, mat(PLATE, { metalness: 0.8, roughness: 0.3 }));
     plate.position.set(0, -3.6, D / 2 + 2.05);
     g.add(plate);
     const soil = box(W, 2, D, mat(pal.soil));

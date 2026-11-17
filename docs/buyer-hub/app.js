@@ -2,9 +2,9 @@
  * OpenAgentic Procurement & Commission Hub (Site A).
  * intake_agent -> discovery_agent -> negotiator_agent, driving the supplier's agents over postMessage RPC.
  */
-import { AgentRuntime, RpcClient, serveRpc, exposeGlobal, fetchJson, validateManifest, OawError } from "./shared/oaw-core.js?v=3ccc351ccd";
-import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=3ccc351ccd";
-import * as H from "./hub-logic.js?v=3ccc351ccd";
+import { AgentRuntime, RpcClient, serveRpc, exposeGlobal, fetchJson, validateManifest, OawError } from "./shared/oaw-core.js?v=fa9d47957d";
+import { h, $, money, createStream, createApproval, createConsent, createSettings, createStatusPill, createInspector } from "./shared/oaw-ui.js?v=fa9d47957d";
+import * as H from "./hub-logic.js?v=fa9d47957d";
 
 const BUILD = document.querySelector('meta[name="oaw-build"]')?.content || "dev";
 const manifest = await (await fetch("./agent-manifest.json", { cache: "no-store" })).json();
@@ -14,8 +14,8 @@ const originOf = (u) => new URL(u).origin;
 
 /* ----------------------------------------------------------------- state */
 
-const SUPPLIERS_KEY = "hub.suppliers.custom.v2"; // only suppliers the visitor added
-const ORDERS_KEY = "hub.orders.v1";
+const SUPPLIERS_KEY = "market.hub.suppliers.custom.v1"; // only suppliers the visitor added
+const ORDERS_KEY = "market.hub.orders.v1";
 const loadJson = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v ?? d; } catch { return d; } };
 const isLoopback = (u) => { try { return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(u).hostname); } catch { return false; } };
 const pageIsLocal = isLoopback(location.href);
@@ -40,84 +40,103 @@ const consent = createConsent();
 
 /* ------------------------------------------------- split view + peer windows */
 
-let frame = null, frameOrigin = null, tab = null, tabOrigin = null;
-const clients = new Map();
+// One live frame and one RPC client per supplier (keyed by its base URL, not its origin:
+// on GitHub Pages several shops share one origin).
+const frames = new Map(); // supplierUrl -> { el, wrap, origin }
+const clients = new Map(); // supplierUrl -> RpcClient
+let tab = null, tabUrl = null;
+const shortName = (url) => (discovered.get(trimUrl(url))?.name || host(url)).split(" — ")[0];
 
-function openSplit(url) {
-  const o = originOf(url);
-  if (!frame || frameOrigin !== o) {
-    const u = new URL(url.endsWith("/") ? url : `${url}/`); // the site's folder, no redirect needed
+function frameFor(url) {
+  const key = trimUrl(url);
+  let f = frames.get(key);
+  if (!f) {
+    const u = new URL(`${key}/`); // the site's folder, no redirect needed
     u.searchParams.set("embedded", "1");
     if (BUILD !== "dev") u.searchParams.set("v", BUILD); // never reuse a stale cached studio page
-    frame = h("iframe", { src: u.href, title: "Supplier site (live)", class: "peer-frame" });
-    frameOrigin = o;
-    const c = clients.get(o);
+    const el = h("iframe", { src: u.href, title: `${shortName(key)} (live)`, class: "peer-frame" });
+    const wrap = h("div", { class: "peer" }, h("div", { class: "peer-label" }, h("strong", { text: shortName(key) }), h("span", { class: "oaw-muted small", text: ` ${host(key)}${new URL(key).pathname}` })), el);
+    f = { el, wrap, origin: originOf(key) };
+    frames.set(key, f);
+    $("#splitFrame").append(wrap);
+    const c = clients.get(key);
     if (c) c.ready = false;
-    $("#splitFrame").replaceChildren(frame);
-    $("#splitTitle").textContent = host(url);
   }
+  return f;
+}
+function openSplit(urls) {
+  for (const u of [].concat(urls)) frameFor(u);
+  $("#splitFrame").dataset.count = String(frames.size);
+  $("#splitTitle").textContent = frames.size > 1 ? `${frames.size} suppliers, live` : [...frames.keys()].map(host).join("");
   document.body.classList.add("split-on");
   $("#splitBtn").setAttribute("aria-pressed", "true");
   $("#splitBtn").textContent = "Close Split-View";
 }
 function closeSplit() {
   document.body.classList.remove("split-on");
-  frame?.remove(); frame = null; frameOrigin = null;
+  for (const [key, f] of frames) { f.wrap.remove(); const c = clients.get(key); if (c) c.ready = false; }
+  frames.clear();
   $("#splitBtn").setAttribute("aria-pressed", "false");
   $("#splitBtn").textContent = "Open Studio Split-View";
 }
 const defaultSupplier = () => registry[0] || published[0];
-$("#splitBtn").addEventListener("click", () => (document.body.classList.contains("split-on") ? closeSplit() : openSplit(defaultSupplier())));
-$("#tabBtn").addEventListener("click", () => { tab = window.open(defaultSupplier(), "miniature-worlds"); tabOrigin = originOf(defaultSupplier()); });
+$("#splitBtn").addEventListener("click", () => (document.body.classList.contains("split-on") ? closeSplit() : openSplit(registry)));
+$("#tabBtn").addEventListener("click", () => { tab = window.open(defaultSupplier(), "agentic-supplier"); tabUrl = trimUrl(defaultSupplier()); });
 
-function peerWindow(origin) {
-  if (frame && frameOrigin === origin && frame.contentWindow) return frame.contentWindow;
-  if (tab && !tab.closed && tabOrigin === origin) return tab;
+function peerWindow(url) {
+  const key = trimUrl(url);
+  const f = frames.get(key);
+  if (f?.el.contentWindow) return f.el.contentWindow;
+  if (tab && !tab.closed && tabUrl === key) return tab;
   return null;
 }
 
 async function peer(url) {
-  const origin = originOf(url);
-  if (!peerWindow(origin)) openSplit(url); // RPC needs a live window of the supplier site
-  let c = clients.get(origin);
+  const key = trimUrl(url);
+  if (!peerWindow(key)) openSplit(key); // RPC needs a live window of the supplier site
+  let c = clients.get(key);
   if (!c) {
-    c = new RpcClient({ origin, getWindow: () => peerWindow(origin), onEvent: (ev) => onRemote(ev, origin) });
-    clients.set(origin, c);
+    c = new RpcClient({ origin: originOf(key), getWindow: () => peerWindow(key), onEvent: (ev) => onRemote(ev, key) });
+    clients.set(key, c);
   }
   if (!c.ready) {
     const t0 = performance.now();
     const info = await c.connect();
     c.ready = true;
-    runtime.emit({ type: "rpc", direction: "out", method: "ping", origin, ms: Math.round(performance.now() - t0), ok: true });
-    runtime.emit({ type: "note", text: `Connected to ${info.name} (${host(origin)}) · supplier runs its own agents with: ${info.provider}` });
+    runtime.emit({ type: "rpc", direction: "out", method: "ping", origin: key, ms: Math.round(performance.now() - t0), ok: true });
+    runtime.emit({ type: "note", text: `Connected to ${info.name} (${host(key)}) · supplier runs its own agents with: ${info.provider}` });
   }
   return c;
 }
 
 async function rpc(url, method, params) {
-  const origin = originOf(url);
-  const c = await peer(url);
-  runtime.emit({ type: "rpc", direction: "out", method, tool: params?.tool || null, origin });
+  const key = trimUrl(url);
+  const c = await peer(key);
+  runtime.emit({ type: "rpc", direction: "out", method, tool: params?.tool || null, origin: key });
   const t0 = performance.now();
   try {
     const r = await c.call(method, params);
     const failed = r && typeof r === "object" && ["failed", "rejected"].includes(r.status);
-    runtime.emit({ type: "rpc", direction: "out", method: failed ? `${method} → ${r.status}` : `${method} ✓`, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0), ok: !failed });
+    runtime.emit({ type: "rpc", direction: "out", method: failed ? `${method} → ${r.status}` : `${method} ✓`, tool: params?.tool || null, origin: key, ms: Math.round(performance.now() - t0), ok: !failed });
     return r;
   } catch (e) {
-    runtime.emit({ type: "rpc", direction: "out", method, tool: params?.tool || null, origin, ms: Math.round(performance.now() - t0), ok: false });
+    runtime.emit({ type: "rpc", direction: "out", method, tool: params?.tool || null, origin: key, ms: Math.round(performance.now() - t0), ok: false });
     throw e;
   }
 }
 
-/** Events streamed from the supplier during an RPC call. */
-function onRemote(ev, origin) {
+/** Events streamed from a supplier during an RPC call, labelled with the shop's name. */
+const pendingAt = new Map(); // supplierUrl -> pending approval text
+function onRemote(ev, key) {
   if (ev.type === "rpc" && ev.direction === "in") return; // our own request echoed back
-  stream.add(ev, { remote: host(origin) });
+  stream.add(ev, { remote: shortName(key) });
   if (ev.type === "approval") {
+    if (ev.state === "pending") pendingAt.set(key, `${shortName(key)}: approve or reject "${ev.tool}"${ev.price != null ? ` (${money(ev.price)})` : ""}`);
+    else pendingAt.delete(key);
     const bar = $("#splitAttention");
-    if (ev.state === "pending") { bar.hidden = false; bar.textContent = `Action needed on ${host(origin)}: approve or reject "${ev.tool}"${ev.price != null ? ` (${money(ev.price)})` : ""}${document.body.classList.contains("split-on") ? " in the studio pane →" : " in the studio tab"}`; }
-    else bar.hidden = true;
+    bar.hidden = !pendingAt.size;
+    bar.textContent = pendingAt.size ? `Action needed · ${[...pendingAt.values()].join(" · ")}${document.body.classList.contains("split-on") ? " in its studio pane →" : " in the studio tab"}` : "";
+    frames.get(key)?.wrap.classList.toggle("attention", ev.state === "pending");
   }
 }
 
@@ -169,7 +188,7 @@ const agentImpl = {
   discovery_agent: {
     prompt: ({ rfq, suppliers }) => `RFQ:\n${JSON.stringify(rfq)}\n\nSuppliers:\n${JSON.stringify(suppliers, null, 1)}`,
     deterministic: (input) => H.discoveryDeterministic(input),
-    normalize: (out, input) => (input.suppliers.some((s) => s.url === out?.supplier_url) ? { supplier_url: out.supplier_url, reason: String(out.reason || "").slice(0, 300) } : { ...H.discoveryDeterministic(input), reason: `Model chose an unknown supplier; using ${input.suppliers[0]?.name}.` }),
+    normalize: (out, input) => H.normalizeShortlist(out, input),
   },
   negotiator_agent: {
     prompt: ({ rfq, quote, round, history }) => `Round ${round} of ${H.MAX_ROUNDS}.\nRFQ: ${JSON.stringify(rfq)}\nSupplier's current quote: ${JSON.stringify(quote)}\nHistory: ${JSON.stringify(history)}`,
@@ -192,7 +211,8 @@ const tools = {
     effect: "read", title: "Request a quote",
     input_schema: { type: "object", required: ["supplier_url", "rfq"], properties: { supplier_url: { type: "string" }, rfq: { type: "object" } } },
     async handler({ supplier_url, rfq }) {
-      const r = await rpc(supplier_url, "callTool", { tool: "request_quote", args: { rfq, caller_agent: "negotiator_agent" } });
+      // Comparison quote: the studio designs, prices and renders, but writes nothing until this buyer confirms.
+      const r = await rpc(supplier_url, "callTool", { tool: "request_quote", args: { rfq, caller_agent: "negotiator_agent", log_rfq: false } });
       if (r.status !== "succeeded") throw new OawError("SUPPLIER_ERROR", r.error || `Supplier returned ${r.status}`);
       return r.result;
     },
@@ -215,7 +235,7 @@ const tools = {
       return {
         target: originOf(args.supplier_url), price: args.price,
         summary: `Place a binding commission order with ${q.supplier || host(args.supplier_url)}. The studio will then ask its owner to lock a build slot.`,
-        lines: [["Supplier", q.supplier || host(args.supplier_url)], ["Quote", args.quote_id], ["Diorama", q.scene?.title || "—"], ["Scale · size", `${q.scale || "—"} · ${q.scene ? `${q.scene.base_width}×${q.scene.base_depth} cm` : "—"}`], ["Lead time", q.lead_time_days ? `${q.lead_time_days} days` : "—"], ["Your budget", money(args.max_budget)], ["First quote", money(deal?.first_price)]],
+        lines: [["Supplier", q.supplier || host(args.supplier_url)], ...(deal?.quotes?.length > 1 ? [["Compared with", deal.quotes.filter((x) => x.url !== trimUrl(args.supplier_url)).map((x) => `${x.short} ${x.quote ? money(x.quote.price) : "(no quote)"}`).join(", ")]] : []), ["Quote", args.quote_id], ["Diorama", q.scene?.title || "—"], ["Scale · size", `${q.scale || "—"} · ${q.scene ? `${q.scene.base_width}×${q.scene.base_depth} cm` : "—"}`], ["Lead time", q.lead_time_days ? `${q.lead_time_days} days` : "—"], ["Your budget", money(args.max_budget)], ["First quote", money(deal?.first_price)]],
       };
     },
     async handler({ supplier_url, quote_id, price }) {
@@ -241,7 +261,24 @@ runtime.on((e) => stream.add(e));
 
 /* ------------------------------------------------------------- deal flow */
 
-const STEPS = ["Intake", "Discovery", "Quote", "Negotiate", "Approve", "Confirmed"];
+const STEPS = ["Intake", "Discovery", "Quotes", "Choose", "Negotiate", "Approve", "Confirmed"];
+
+/** Wait for the human (or "Let the agent pick") to choose one of the comparison quotes. */
+function awaitChoice(options) {
+  return new Promise((resolve) => {
+    deal.choice = { options, resolve: (url, by) => { deal.choice = null; resolve({ url, by }); } };
+    drawDeal();
+    $("#deal").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+}
+function chooseQuote(which) {
+  const c = deal?.choice;
+  if (!c) throw new OawError("NO_CHOICE", "There is no comparison waiting for a choice.");
+  if (which === "agent") return c.resolve(H.rankQuotes(c.options.map((o) => ({ ...o.quote, url: o.url })), deal.rfq.max_budget)[0].url, "agent");
+  const o = typeof which === "number" ? c.options[which] : c.options.find((x) => x.url === trimUrl(which));
+  if (!o) throw new OawError("BAD_CHOICE", `No quote ${which}.`);
+  c.resolve(o.url, "you");
+}
 function step(name, state) { deal.steps[name] = state; drawDeal(); }
 const buyerView = (q) => ({ quote_id: q.quote_id, supplier: q.supplier, price: q.price, list_price: q.list_price, currency: q.currency, lead_time_days: q.lead_time_days, scale: q.scale, final: !!q.final, accepted: !!q.accepted, round: q.round, message: q.message, blueprint: q.scene ? { terrain: q.scene.terrain_type, size_cm: [q.scene.base_width, q.scene.base_depth], structures: q.scene.structures.length, water: q.scene.water_feature, leds: q.scene.led_points.length } : null });
 const ok = (r, what) => { if (r.status === "succeeded") return r.result; throw new OawError(r.code || "TOOL_FAILED", `${what}: ${r.error || r.status}`); };
@@ -250,7 +287,8 @@ async function runCommission(prompt) {
   if (busy) throw new OawError("BUSY", "A commission is already running.");
   busy = true;
   setBusy(true);
-  deal = { prompt, steps: {}, history: [], rfq: null, supplier: null, quote: null, first_price: null, result: null };
+  deal = { prompt, steps: {}, history: [], rfq: null, supplier: null, quote: null, quotes: [], choice: null, first_price: null, result: null };
+  for (const f of frames.values()) f.wrap.classList.remove("chosen", "passed");
   drawDeal();
   runtime.emit({ type: "run_start", prompt });
   try {
@@ -264,22 +302,49 @@ async function runCommission(prompt) {
     const eligible = found.filter((s) => s.ok && s.capabilities.includes(manifest.peers.required_capability));
     if (!eligible.length) throw new OawError("NO_SUPPLIER", `No registered supplier publishes ${manifest.peers.required_capability}. ${found.map((s) => `${s.name}: ${s.error || "missing capability"}`).join("; ")}`);
     const pick = await runtime.runAgent("discovery_agent", { rfq, suppliers: eligible.map(({ url, name, capabilities, scales, terrains }) => ({ url, name, capabilities, scales, terrains })) }, { from: "intake_agent" });
-    deal.supplier = eligible.find((s) => s.url === pick.supplier_url) || eligible[0];
-    runtime.emit({ type: "note", agent: "discovery_agent", text: `Chose ${deal.supplier.name}: ${pick.reason}` });
+    const shortlist = pick.shortlist.map((u) => eligible.find((s) => s.url === u)).filter(Boolean);
+    runtime.emit({ type: "note", agent: "discovery_agent", text: `Shortlisted ${shortlist.map((s) => shortName(s.url)).join(", ")}: ${pick.reason}` });
     step("Discovery", "done");
 
-    step("Quote", "active");
+    step("Quotes", "active");
     runtime.emit({ type: "handoff", from: "discovery_agent", to: "negotiator_agent" });
-    let quote = ok(await runtime.callTool("request_supplier_quote", { supplier_url: deal.supplier.url, rfq }), "Quote request");
-    if (quote.status === "rejected") throw new OawError("SUPPLIER_REJECTED", `${quote.supplier} cannot build this: ${quote.reason}`);
+    openSplit(shortlist.map((s) => s.url)); // every shop renders its own 3D blueprint side by side
+    deal.quotes = shortlist.map((s) => ({ url: s.url, name: s.name, short: shortName(s.url), quote: null, error: null, pending: true }));
+    drawDeal();
+    await Promise.all(deal.quotes.map(async (row) => {
+      try {
+        const q = ok(await runtime.callTool("request_supplier_quote", { supplier_url: row.url, rfq }), `Quote from ${row.short}`);
+        if (q.status === "rejected") row.error = `Cannot build this: ${q.reason}`;
+        else row.quote = q;
+      } catch (e) { row.error = e.message; }
+      row.pending = false;
+      drawDeal();
+    }));
+    const options = deal.quotes.filter((r) => r.quote);
+    if (!options.length) throw new OawError("NO_QUOTES", `No supplier could quote this. ${deal.quotes.map((r) => `${r.short}: ${r.error}`).join("; ")}`);
+    runtime.emit({ type: "note", agent: "negotiator_agent", text: `Quotes: ${deal.quotes.map((r) => `${r.short} ${r.quote ? `${money(r.quote.price)}, ${r.quote.lead_time_days} days` : "no quote"}`).join(" · ")}` });
+    step("Quotes", "done");
+
+    step("Choose", "active");
+    let chosen;
+    if (options.length === 1) { chosen = { url: options[0].url, by: "only quote" }; runtime.emit({ type: "note", text: `Only ${options[0].short} quoted; continuing with it.` }); }
+    else {
+      runtime.emit({ type: "approval", state: "pending", tool: "choose_quote" });
+      chosen = await awaitChoice(options);
+      runtime.emit({ type: "approval", state: "approved", tool: `choose_quote → ${shortName(chosen.url)} (picked by ${chosen.by})` });
+    }
+    const row = options.find((o) => o.url === chosen.url);
+    deal.supplier = eligible.find((s) => s.url === row.url);
+    for (const [key, f] of frames) { f.wrap.classList.toggle("chosen", key === row.url); f.wrap.classList.toggle("passed", key !== row.url && deal.quotes.some((q) => q.url === key)); }
+    let quote = row.quote;
     deal.quote = quote; deal.first_price = quote.price;
     deal.history.push({ by: "supplier", price: quote.price, note: "first quote" });
-    step("Quote", "done");
+    step("Choose", "done");
 
     step("Negotiate", "active");
     let accepted = false;
     for (let round = 1; round <= H.MAX_ROUNDS + 1 && !accepted; round++) {
-      const d = await runtime.runAgent("negotiator_agent", { rfq, quote: buyerView(quote), round, history: deal.history }, { from: round === 1 ? "negotiator_agent" : `diorama_estimator@${host(deal.supplier.url)}` });
+      const d = await runtime.runAgent("negotiator_agent", { rfq, quote: buyerView(quote), round, history: deal.history }, { from: round === 1 ? "negotiator_agent" : `diorama_estimator@${shortName(deal.supplier.url)}` });
       const dec = H.enforceBuyerPolicy(d, { price: quote.price, budget: rfq.max_budget, final: quote.final, round });
       if (dec.policy) runtime.emit({ type: "note", agent: "negotiator_agent", text: `Buyer policy: ${dec.policy}` });
       if (dec.action === "accept") { accepted = true; runtime.emit({ type: "negotiation", text: `Buyer accepts ${money(quote.price)}` }); break; }
@@ -342,14 +407,40 @@ function drawDeal() {
     h("ol", { class: "steps" }, ...STEPS.map((s) => h("li", { class: deal.steps[s] || "todo", text: s }))),
     r ? h("div", { class: "card" }, h("p", { class: "kicker", text: "RFQ · intake_agent" }),
       h("dl", { class: "kv" }, ...[["Theme", r.theme], ["Scale", r.scale || "—"], ["Size", `${r.dimensions_cm.width}×${r.dimensions_cm.depth} cm`], ["Terrain", r.terrain_hint || "—"], ["Features", r.features.join(", ") || "—"], ["Budget", money(r.max_budget)]].flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })]))) : null,
-    deal.supplier ? h("p", { class: "oaw-muted small", text: `Supplier: ${deal.supplier.name} · ${deal.supplier.url}` }) : null,
+    deal.quotes.length ? drawComparison() : null,
+    deal.supplier ? h("p", { class: "oaw-muted small", text: `Chosen supplier: ${deal.supplier.name} · ${deal.supplier.url}` }) : null,
     q ? h("div", { class: "card quote" },
       h("div", { class: "qrow" }, h("div", {}, h("p", { class: "kicker", text: q.accepted ? "Agreed price" : "Current quote" }), h("p", { class: "price", text: money(q.price) }), deal.first_price && deal.first_price !== q.price ? h("p", { class: "oaw-muted small", text: `First quote ${money(deal.first_price)} · saved ${money(deal.first_price - q.price)}` }) : null),
         q.scene ? h("dl", { class: "kv" }, ...[["Blueprint", q.scene.title], ["Terrain", q.scene.terrain_type], ["Structures", String(q.scene.structures.length)], ["Water", q.scene.water_feature ? "resin" : "none"], ["LEDs", String(q.scene.led_points.length)], ["Lead time", `${q.lead_time_days} days`]].flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })])) : null),
       q.message ? h("p", { class: "msg", text: `“${q.message}”` }) : null,
-      deal.history.length > 1 ? h("ol", { class: "hist" }, ...deal.history.map((x) => h("li", { class: x.by, text: `${x.by === "buyer" ? "You" : "Supplier"}: ${money(x.price)}${x.note ? ` · ${x.note}` : ""}` }))) : null) : null,
+      deal.history.length > 1 ? h("ol", { class: "hist" }, ...deal.history.map((x) => h("li", { class: x.by, text: `${x.by === "buyer" ? "You" : deal.supplier ? shortName(deal.supplier.url) : "Supplier"}: ${money(x.price)}${x.note ? ` · ${x.note}` : ""}` }))) : null) : null,
     deal.result ? h("p", { class: `result ${deal.result.ok ? "ok" : "bad"}`, text: deal.result.text }) : null,
   ].filter(Boolean));
+}
+
+/** Side-by-side quote cards. While a choice is pending they carry the "Choose this quote" buttons. */
+function drawComparison() {
+  const budget = deal.rfq?.max_budget;
+  const quoted = deal.quotes.filter((r) => r.quote).map((r) => r.quote);
+  const waiting = !!deal.choice;
+  const best = waiting ? H.rankQuotes(deal.quotes.filter((r) => r.quote).map((r) => ({ ...r.quote, url: r.url })), budget)[0]?.url : null;
+  return h("div", { class: "compare" },
+    h("p", { class: "kicker", text: waiting ? "Compare the quotes and choose one · both 3D blueprints are live in the split view" : `Quotes from ${deal.quotes.length} supplier${deal.quotes.length > 1 ? "s" : ""}` }),
+    h("div", { class: "qgrid" }, ...deal.quotes.map((r, i) => {
+      const q = r.quote;
+      const chosen = deal.supplier?.url === r.url;
+      return h("div", { class: `qcard ${chosen ? "chosen" : ""} ${deal.supplier && !chosen ? "passed" : ""}` },
+        h("p", { class: "qshop", text: r.short }),
+        r.pending ? h("p", { class: "oaw-muted small", text: "Designing the 3D blueprint and pricing it…" }) : null,
+        r.error ? h("p", { class: "oaw-bad small", text: r.error }) : null,
+        q ? h("p", { class: "price", text: money(q.price) }) : null,
+        q ? h("div", { class: "tags" }, ...H.quoteBadges(q, quoted, budget).map((t) => h("span", { class: `tag ${/Over/.test(t) ? "bad" : /Within/.test(t) ? "ok" : ""}`, text: t }))) : null,
+        q ? h("dl", { class: "kv" }, ...[["Lead time", `${q.lead_time_days} days`], ["Blueprint", q.scene?.title || "—"], ["Structures", String(q.scene?.structures.length ?? "—")], ["Water · LEDs", `${q.scene?.water_feature ? "resin" : "none"} · ${q.scene?.led_points.length ?? 0}`], ["Labour", `${q.breakdown.labor_hours} h × $${q.breakdown.labor_rate}`]].flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { text: v })])) : null,
+        waiting && q ? h("button", { class: "oaw-btn primary", type: "button", text: "Choose this quote", "aria-label": `Choose ${r.short} at ${money(q.price)}`, onclick: () => chooseQuote(i) }) : null,
+        waiting && q && r.url === best ? h("p", { class: "oaw-muted small", text: "Agent's pick: within budget, then lowest price, then fastest." }) : null,
+        chosen ? h("p", { class: "small chosen-note", text: "✓ Chosen" }) : null);
+    })),
+    waiting ? h("div", { class: "oaw-row" }, h("button", { class: "oaw-btn ghost", type: "button", text: "Let the agent pick", onclick: () => chooseQuote("agent") })) : null);
 }
 
 function drawRegistry() {
@@ -428,7 +519,7 @@ exposeGlobal({
   run: (prompt) => runCommission(prompt),
   callTool: (name, args) => runtime.callTool(name, args, { origin: location.origin }),
   getState,
-  extra: { openSplitView: (url) => openSplit(url || defaultSupplier()) },
+  extra: { openSplitView: (url) => openSplit(url || registry), chooseQuote: (which) => chooseQuote(which) },
 });
 
 /* ----------------------------------------------------------------- boot */

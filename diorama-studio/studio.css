@@ -89,5 +89,14 @@ body.embedded h1 { font-size: 16px; }
 body.embedded .layout { grid-template-columns: 1fr; padding: 10px; }
 body.embedded .stream { min-height: 320px; }
 body.embedded { height: auto; }
+/* In a buyer's split view the 3D model fills the pane; quote and board scroll below. */
+body.embedded .viewer { height: max(220px, calc(100vh - 56px)); }
+body.embedded .topbar { flex-wrap: nowrap; padding: 6px 10px; }
+body.embedded h1 { font-size: 15px; white-space: nowrap; }
+body.embedded .mark { width: 26px; height: 26px; }
+body.embedded #manifestBtn { display: none; }
+body.embedded .actions { flex-wrap: nowrap; }
+body.embedded .actions .oaw-btn, body.embedded .oaw-pill { padding: 3px 9px; font-size: 12px; }
+body.embedded .layout { gap: 8px; }
 @media (max-width: 720px) { .board { grid-template-columns: 1fr; } .vp-hint { display: none; } }
 @media (prefers-reduced-motion: reduce) { .bcard { animation: none; } }

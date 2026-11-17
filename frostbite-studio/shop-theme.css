@@ -1,0 +1,26 @@
+/* Frostbite Miniatures: cold slate and ice blue. Overrides the Miniature Worlds workshop palette. */
+:root {
+  --oaw-bg: #e8eef3;
+  --oaw-panel: #f8fbfd;
+  --oaw-ink: #15222e;
+  --oaw-muted: #5b6f80;
+  --oaw-line: #d3dee7;
+  --oaw-accent: #1f6fa8;
+  --oaw-code: #e9f0f5;
+  --walnut: #1d2833;
+  --brass: #9fd3f2;
+}
+.topbar { color: #e6f2fa; }
+.sub { color: #a9c4d6; }
+.topbar .oaw-btn { background: #2a3a48; border-color: #3e5466; color: #e6f2fa; }
+.topbar .oaw-pill { background: #121b23; border-color: #3e5466; color: #e6f2fa; }
+.mark { background: linear-gradient(160deg, transparent 52%, #9fd3f2 53%), radial-gradient(circle at 70% 30%, #fff 3px, transparent 4px), #2f4a5f; }
+.viewer { background: #dfe8ee; }
+.vp-empty { background: radial-gradient(ellipse at 50% 60%, #f1f6f9 0%, #dbe5ec 70%); color: #3e5466; }
+.vp-empty-mark { background: linear-gradient(160deg, #e9f1f6 0 45%, #c9d8e3 45% 100%); box-shadow: 0 14px 0 -4px #26313d, 0 18px 24px -10px rgba(21, 34, 46, .45); }
+.vp-title, .vp-meta { background: rgba(248, 251, 253, .85); color: #15222e; }
+.col { background: #e1eaf0; }
+.col h3 { color: #2f4a5f; }
+.count, .bcard { background: #f8fbfd; }
+.qmsg { color: #3e5466; }
+.qhist .studio { color: #1f6fa8; }

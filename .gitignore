@@ -13,3 +13,4 @@ netlify.toml
 scripts/vendor-firebase.mjs
 package-lock.json
 legacy-task-hub-README.md
+DEVPOST.md

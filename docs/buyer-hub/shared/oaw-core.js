@@ -673,6 +673,8 @@ export class RpcClient {
     this.pending = new Map();
     this.handler = (event) => {
       if (event.origin !== this.origin) return;
+      const w = this.getWindow();
+      if (w && event.source !== w) return; // another window on the same origin (e.g. a second shop's frame)
       const m = event.data;
       if (!isObj(m) || !this.pending.has(m.id)) return;
       if (m.type === RPC.EVENT) this.onEvent?.(m.event);

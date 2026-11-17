@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "An independent artisan storefront for custom scale dioramas. Its agents design a procedural 3D blueprint from a brief, quote it under scale rules, negotiate within a 12% discount, and manage the commission board. Other agentic sites can request quotes and confirm commissions over window.postMessage.",
   "profile": "worldwide-agentic-web-mvp-0.2",
-  "endpoint": "https://isgudtek.github.io/open-agentic-dioramas/diorama-studio/",
+  "endpoint": "https://isgudtek.github.io/open-agentic-diorama-market/diorama-studio/",
   "networks": [
     {
       "name": "diorama_studio",
@@ -91,6 +91,10 @@
           },
           "caller_agent": {
             "type": "string"
+          },
+          "log_rfq": {
+            "type": "boolean",
+            "description": "false for comparison quotes; default true"
           }
         }
       }

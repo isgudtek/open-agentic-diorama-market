@@ -101,7 +101,7 @@
     {
       "name": "discovery_agent",
       "function": {
-        "description": "Fetches /agent-manifest.json from registered supplier sites, checks their published capabilities and picks the best fit for the RFQ.",
+        "description": "Fetches /agent-manifest.json from registered supplier sites, checks their published capabilities and shortlists every supplier that can quote the RFQ.",
         "parameters": {
           "type": "object",
           "required": [
@@ -118,16 +118,20 @@
           }
         }
       },
-      "instructions": "Choose the best supplier for the RFQ from the given list. Only choose a supplier from the list. Prefer one that supports the RFQ's scale and terrain. Reply with {\"supplier_url\": <url from the list>, \"reason\": <one sentence>} and nothing else.",
+      "instructions": "Shortlist the suppliers that should quote this RFQ, so the buyer can compare offers. Only use URLs from the given list. Include every supplier that builds the RFQ's scale (at most 4); leave out suppliers that do not. Reply with {\"shortlist\": [<urls from the list>], \"reason\": <one sentence>} and nothing else.",
       "output_schema": {
         "type": "object",
         "required": [
-          "supplier_url",
+          "shortlist",
           "reason"
         ],
         "properties": {
-          "supplier_url": {
-            "type": "string"
+          "shortlist": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string"
+            }
           },
           "reason": {
             "type": "string",
@@ -143,7 +147,7 @@
     {
       "name": "negotiator_agent",
       "function": {
-        "description": "Sends the RFQ to the chosen supplier's agent network, evaluates the quote and 3D blueprint, negotiates if it is over budget, and asks the human to approve the order.",
+        "description": "Collects quotes and 3D blueprints from the shortlisted suppliers, lets the human choose one, negotiates with the chosen supplier if it is over budget, and asks the human to approve the order.",
         "parameters": {
           "type": "object",
           "required": [
@@ -199,7 +203,8 @@
         "request_supplier_quote",
         "send_counter_offer",
         "place_order",
-        "https://isgudtek.github.io/open-agentic-dioramas/diorama-studio/diorama_studio"
+        "https://isgudtek.github.io/open-agentic-diorama-market/diorama-studio/diorama_studio",
+        "https://isgudtek.github.io/open-agentic-diorama-market/frostbite-studio/frostbite_studio"
       ]
     }
   ]
